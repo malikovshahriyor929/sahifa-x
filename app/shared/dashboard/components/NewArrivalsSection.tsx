@@ -1,7 +1,9 @@
-import type { Book } from "../types";
+import Link from "next/link";
+import type { Book } from "@/types";
 import { EyeIcon, SparklesIcon } from "./icons";
 
 type NewArrivalsSectionProps = {
+  locale: string;
   books: Book[];
   loading: boolean;
 };
@@ -13,7 +15,7 @@ const categoryColors: Record<string, string> = {
   Sarguzasht: "text-primary-dark bg-primary-light/20",
 };
 
-export default function NewArrivalsSection({ books, loading }: NewArrivalsSectionProps) {
+export default function NewArrivalsSection({ locale, books, loading }: NewArrivalsSectionProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -21,9 +23,12 @@ export default function NewArrivalsSection({ books, loading }: NewArrivalsSectio
           <SparklesIcon className="size-5 text-primary" />
           Yangilar
         </h3>
-        <button className="text-sm font-bold text-primary transition hover:text-primary-dark hover:underline">
+        <Link
+          href={`/${locale}/search`}
+          className="text-sm font-bold text-primary transition hover:text-primary-dark hover:underline"
+        >
           Barchasini ko&apos;rish
-        </button>
+        </Link>
       </div>
 
       {loading ? (
@@ -38,9 +43,11 @@ export default function NewArrivalsSection({ books, loading }: NewArrivalsSectio
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {books.map((book) => (
-            <article
+            <Link
               key={book.id}
+              href={`/${locale}/books/${encodeURIComponent(book.id)}`}
               className="group flex cursor-pointer gap-4 rounded-2xl border border-primary-light/25 bg-white p-3 transition-all hover:border-primary/50 hover:shadow-md hover:shadow-primary/10"
+              aria-label={`${book.title} kitobi tafsilotlari`}
             >
               <div className="relative aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-lg shadow-md">
                 <div
@@ -80,7 +87,7 @@ export default function NewArrivalsSection({ books, loading }: NewArrivalsSectio
                   </div>
                 </div>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       )}

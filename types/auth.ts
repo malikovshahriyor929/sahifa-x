@@ -30,6 +30,7 @@ export type RegisterFormProps = {
 
 export type SignOutButtonProps = {
   locale: string;
+  className?: string;
 };
 
 export type LoginPageSearchParams = {

@@ -1,4 +1,4 @@
-import type { Author } from "../types";
+import type { Author } from "@/types";
 import { GridIcon, PlusUserIcon, UsersIcon } from "./icons";
 
 type RightSidebarProps = {

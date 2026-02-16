@@ -4,22 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { getBooks, getMyBooks } from "@/server/api";
 import MainContent from "./components/MainContent";
 import {
-  CURRENT_USER,
-  DASHBOARD_STATS,
-  NEW_ARRIVALS,
-  TOP_AUTHORS,
-  TOP_GENRES,
-  TRENDING_BOOKS,
-} from "./constants";
-import {
   deriveTopAuthors,
   deriveTopGenres,
-  fallbackBooks,
   normalizeBooks,
   pickNewArrivalBooks,
   pickTrendingBooks,
 } from "./utils";
-import type { Author, Book, CurrentUser, DashboardStats } from "./types";
+import type { Author, Book, CurrentUser, DashboardStats } from "@/types";
 
 type DashboardAppProps = {
   locale: string;
@@ -30,6 +21,39 @@ type DashboardAppProps = {
   };
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function getMyBooksTotal(payload: unknown, fallback: number): number {
+  if (!isRecord(payload)) {
+    return fallback;
+  }
+
+  const directMeta = isRecord(payload._meta) ? payload._meta : null;
+  const nestedData = isRecord(payload.data) ? payload.data : null;
+  const nestedMeta = nestedData && isRecord(nestedData._meta) ? nestedData._meta : null;
+
+  const total =
+    toNumber(directMeta?.total) ??
+    toNumber(directMeta?.count) ??
+    toNumber(nestedMeta?.total) ??
+    toNumber(nestedMeta?.count);
+
+  return typeof total === "number" ? total : fallback;
+}
+
 function formatCompact(value: number): string {
   if (value >= 1000) {
     return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -38,8 +62,9 @@ function formatCompact(value: number): string {
 }
 
 export default function DashboardApp({ locale, user }: DashboardAppProps) {
-  const [books, setBooks] = useState<Book[]>(fallbackBooks());
+  const [books, setBooks] = useState<Book[]>([]);
   const [myBooks, setMyBooks] = useState<Book[]>([]);
+  const [myBooksTotal, setMyBooksTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,7 +76,7 @@ export default function DashboardApp({ locale, user }: DashboardAppProps) {
       try {
         const [booksPayload, myBooksPayload] = await Promise.all([
           getBooks(),
-          getMyBooks().catch(() => null),
+          getMyBooks({ page: 1, per_page: 10 }).catch(() => null),
         ]);
 
         if (!active) {
@@ -62,19 +87,22 @@ export default function DashboardApp({ locale, user }: DashboardAppProps) {
         const normalizedMyBooks = myBooksPayload
           ? normalizeBooks(myBooksPayload)
           : [];
+        const normalizedMyBooksTotal = getMyBooksTotal(
+          myBooksPayload,
+          normalizedMyBooks.length
+        );
 
-        if (normalizedBooks.length > 0) {
-          setBooks(normalizedBooks);
-        } else {
-          setBooks(fallbackBooks());
-        }
+        setBooks(normalizedBooks);
 
         setMyBooks(normalizedMyBooks);
+        setMyBooksTotal(normalizedMyBooksTotal);
       } catch {
         if (!active) {
           return;
         }
-        setBooks(fallbackBooks());
+        setBooks([]);
+        setMyBooks([]);
+        setMyBooksTotal(0);
       } finally {
         if (active) {
           setLoading(false);
@@ -90,44 +118,49 @@ export default function DashboardApp({ locale, user }: DashboardAppProps) {
   }, []);
 
   const safeUser: CurrentUser = {
-    name: user?.name ?? CURRENT_USER.name,
-    role: CURRENT_USER.role,
-    avatarUrl: user?.image ?? CURRENT_USER.avatarUrl,
+    name: user?.name ?? user?.email ?? "",
+    role: "",
+    avatarUrl: user?.image ?? "",
   };
 
   const trendingBooks = useMemo(() => {
-    const picked = pickTrendingBooks(books);
-    return picked.length ? picked : TRENDING_BOOKS;
+    return pickTrendingBooks(books);
   }, [books]);
 
   const newArrivalBooks = useMemo(() => {
-    const picked = pickNewArrivalBooks(books);
-    return picked.length ? picked : NEW_ARRIVALS;
+    return pickNewArrivalBooks(books);
   }, [books]);
 
   const topAuthors = useMemo<Author[]>(() => {
-    const derived = deriveTopAuthors(books);
-    return derived.length ? derived : TOP_AUTHORS;
+    return deriveTopAuthors(books);
   }, [books]);
 
   const topGenres = useMemo(() => {
-    const derived = deriveTopGenres(books);
-    return derived.length ? derived : TOP_GENRES;
+    return deriveTopGenres(books);
   }, [books]);
 
   const stats: DashboardStats = useMemo(() => {
-    const libraryCount = myBooks.length || DASHBOARD_STATS.booksInLibrary;
-    const totalReadsNumber = books.reduce((sum, book) => {
+    const libraryCount = myBooksTotal;
+    const totalReadsNumber = myBooks.reduce((sum, book) => {
       const parsed = Number(String(book.readCount ?? "0").replace(/[^\d.]/g, ""));
       return sum + (Number.isFinite(parsed) ? parsed : 0);
     }, 0);
 
     return {
-      unreadChapters: DASHBOARD_STATS.unreadChapters,
+      unreadChapters: 0,
       booksInLibrary: libraryCount,
-      totalReads: totalReadsNumber > 0 ? formatCompact(totalReadsNumber) : DASHBOARD_STATS.totalReads,
+      totalReads: totalReadsNumber > 0 ? formatCompact(totalReadsNumber) : "0",
     };
-  }, [books, myBooks.length]);
+  }, [myBooks, myBooksTotal]);
+
+  const startWritingHref = `/${locale}/books`;
+  const continueReadingHref = useMemo(() => {
+    const continueBook = myBooks[0] ?? books[0];
+    if (continueBook?.id) {
+      return `/${locale}/books/${encodeURIComponent(continueBook.id)}`;
+    }
+    return `/${locale}/search`;
+  }, [books, locale, myBooks]);
 
   return (
     <MainContent
@@ -139,6 +172,8 @@ export default function DashboardApp({ locale, user }: DashboardAppProps) {
       newArrivals={newArrivalBooks}
       topAuthors={topAuthors}
       topGenres={topGenres}
+      startWritingHref={startWritingHref}
+      continueReadingHref={continueReadingHref}
     />
   );
 }

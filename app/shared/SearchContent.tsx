@@ -1,5 +1,12 @@
-import { NEW_ARRIVALS, TRENDING_BOOKS } from "../constants";
-import { FilterIcon, SearchIcon, StarIcon } from "./icons";
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import BookCard from "@/app/shared/components/BookCard";
+import { getBooks } from "@/server/api";
+import { normalizeBooks } from "@/app/shared/dashboard/utils";
+import { FilterIcon, SearchIcon } from "@/app/shared/icons";
+import type { Book } from "@/types";
 
 const FILTER_TAGS = [
   "Barchasi",
@@ -13,8 +20,111 @@ const FILTER_TAGS = [
 
 const LANGUAGES = ["O'zbekcha", "Russian", "English", "Qaraqalpaq"];
 
+const PER_PAGE = 10;
+
+function mergeBooks(existing: Book[], incoming: Book[]) {
+  const byId = new Map<string, Book>();
+  [...existing, ...incoming].forEach((book) => {
+    byId.set(book.id, book);
+  });
+  return [...byId.values()];
+}
+
 export default function SearchContent() {
-  const allBooks = [...TRENDING_BOOKS, ...NEW_ARRIVALS];
+  const params = useParams<{ locale?: string }>();
+  const locale = typeof params?.locale === "string" ? params.locale : "uz";
+  const [query, setQuery] = useState("");
+  const [books, setBooks] = useState<Book[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const requestIdRef = useRef(0);
+  const skipInitialQueryRef = useRef(true);
+
+  const fetchBooks = useCallback(async (nextPage: number, nextQuery: string, append: boolean) => {
+    const requestId = ++requestIdRef.current;
+    setError(null);
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const payload = await getBooks({
+        search: nextQuery.trim(),
+        page: nextPage,
+        perPage: PER_PAGE,
+      });
+      const normalized = normalizeBooks(payload);
+
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+
+      setHasMore(normalized.length >= PER_PAGE);
+      setPage(nextPage + 1);
+      setBooks((prev) => (append ? mergeBooks(prev, normalized) : normalized));
+    } catch {
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+      setError("Ma'lumotlarni yuklab bo'lmadi.");
+      if (!append) {
+        setBooks([]);
+      }
+      setHasMore(false);
+    } finally {
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBooks(1, query, false);
+  }, [fetchBooks]);
+
+  useEffect(() => {
+    if (skipInitialQueryRef.current) {
+      skipInitialQueryRef.current = false;
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      setPage(1);
+      setHasMore(true);
+      setBooks([]);
+      fetchBooks(1, query, false);
+    }, 400);
+
+    return () => clearTimeout(handler);
+  }, [fetchBooks, query]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && hasMore && !loading && !loadingMore) {
+          fetchBooks(page, query, true);
+        }
+      },
+      { rootMargin: "200px 0px" }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [fetchBooks, hasMore, loading, loadingMore, page, query]);
 
   return (
     <div className="flex h-full">
@@ -33,6 +143,8 @@ export default function SearchContent() {
                 type="text"
                 className="block w-full rounded-[20px] border border-primary-light/20 bg-white py-5 pl-16 pr-6 text-lg text-dark-900 shadow-xl shadow-black/5 outline-none transition-all placeholder:text-dark-900/50 focus:border-primary focus:ring-2 focus:ring-primary/40"
                 placeholder="Kitob, muallif yoki janr qidiring..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
               />
             </div>
           </div>
@@ -55,31 +167,49 @@ export default function SearchContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-8 pb-12 sm:grid-cols-2 lg:grid-cols-4">
-            {allBooks.map((book) => (
-              <article key={book.id} className="group flex cursor-pointer flex-col gap-3">
-                <div className="relative aspect-[2/3] w-full overflow-hidden rounded-[20px] shadow-lg shadow-black/30">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- Remote URLs come from API data and can vary by domain. */}
-                  <img
-                    src={book.coverUrl}
-                    alt={book.title}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80" />
-                  <div className="absolute right-3 top-3 flex items-center gap-1 rounded-lg border border-white/10 bg-black/50 px-2 py-1 text-xs font-bold text-white backdrop-blur-md">
-                    <StarIcon className="size-3.5 text-yellow-400" />
-                    {typeof book.rating === "number" ? book.rating.toFixed(1) : "4.5"}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="truncate text-lg font-bold leading-tight text-dark-900 transition-colors group-hover:text-primary">
-                    {book.title}
-                  </h4>
-                  <p className="mt-1 text-sm text-dark-900/60">{book.author}</p>
-                </div>
-              </article>
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 gap-8 pb-12 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div
+                  key={`search-skeleton-${index}`}
+                  className="aspect-[2/3] animate-pulse rounded-[20px] bg-primary/10"
+                />
+              ))}
+            </div>
+          ) : books.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-primary-light/30 bg-white/70 p-10 text-center text-sm text-dark-900/60">
+              Hech narsa topilmadi.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-8 pb-6 sm:grid-cols-2 lg:grid-cols-4">
+              {books.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  link={`/${locale}/books/${encodeURIComponent(book.id)}`}
+                />
+              ))}
+            </div>
+          )}
+
+          {error ? (
+            <div className="mb-8 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {error}
+            </div>
+          ) : null}
+
+          <div ref={loadMoreRef} className="h-6" />
+
+          {loadingMore ? (
+            <div className="grid grid-cols-1 gap-8 pb-12 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`search-more-${index}`}
+                  className="aspect-[2/3] animate-pulse rounded-[20px] bg-primary/10"
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

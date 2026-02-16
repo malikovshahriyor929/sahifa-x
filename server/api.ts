@@ -1,6 +1,11 @@
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
 import { getSession, signOut } from "next-auth/react";
 import { defaultLocale } from "@/types/auth";
+import {
+  clearRefreshTokenCookie,
+  getRefreshTokenCookie,
+  setRefreshTokenCookie,
+} from "@/app/shared/authCookies";
 
 type SessionLike = {
   user?: {
@@ -83,6 +88,33 @@ export interface RefreshTokenRequest extends UnknownRecord {
   refreshToken: string;
 }
 
+export interface CreateBookRequest extends UnknownRecord {
+  title: string;
+  description: string;
+  coverUrl: string;
+  language: string;
+  category: string;
+  status: "DRAFT" | "PUBLISHED" | string;
+  monetization: "FREE" | "BUY_ONLY" | "BUY_AND_RENT" | "RENT_ONLY" | string;
+  visibility?: "PUBLIC" | "PRIVATE" | string;
+  buyPriceCents?: number | null;
+  rentPriceCents?: number | null;
+  currency?: string;
+  rentDurationDays?: number | null;
+}
+
+export interface ChapterWriteRequest extends UnknownRecord {
+  title: string;
+  content: string;
+  contentUrl?: string | null;
+  isPreview?: boolean;
+}
+
+type TokenPair = {
+  accessToken?: string;
+  refreshToken?: string;
+};
+
 export interface ForgotPasswordRequest extends UnknownRecord {
   email: string;
 }
@@ -96,8 +128,10 @@ export interface RetryableRequest extends AxiosRequestConfig {
   _retry?: boolean;
 }
 
+let accessTokenOverride: string | null = null;
+
 function getAccessToken(session: SessionLike | null): string | undefined {
-  return session?.user?.accessToken;
+  return accessTokenOverride ?? session?.user?.accessToken;
 }
 
 function setAuthHeader(config: AxiosRequestConfig, token: string): void {
@@ -106,11 +140,90 @@ function setAuthHeader(config: AxiosRequestConfig, token: string): void {
   config.headers = headers;
 }
 
+function parseTokenResponse(payload: unknown): TokenPair {
+  if (!payload || typeof payload !== "object") {
+    return {};
+  }
+
+  const record = payload as UnknownRecord;
+  const nestedData = typeof record.data === "object" && record.data ? record.data : record;
+  const nestedTokens =
+    typeof (nestedData as UnknownRecord).tokens === "object" &&
+    (nestedData as UnknownRecord).tokens
+      ? (nestedData as UnknownRecord).tokens
+      : {};
+
+  const accessToken =
+    typeof (nestedData as UnknownRecord).accessToken === "string"
+      ? ((nestedData as UnknownRecord).accessToken as string)
+      : typeof (record as UnknownRecord).accessToken === "string"
+        ? ((record as UnknownRecord).accessToken as string)
+        : typeof (nestedTokens as UnknownRecord).accessToken === "string"
+          ? ((nestedTokens as UnknownRecord).accessToken as string)
+          : undefined;
+
+  const refreshToken =
+    typeof (nestedData as UnknownRecord).refreshToken === "string"
+      ? ((nestedData as UnknownRecord).refreshToken as string)
+      : typeof (record as UnknownRecord).refreshToken === "string"
+        ? ((record as UnknownRecord).refreshToken as string)
+        : typeof (nestedTokens as UnknownRecord).refreshToken === "string"
+          ? ((nestedTokens as UnknownRecord).refreshToken as string)
+          : undefined;
+
+  return { accessToken, refreshToken };
+}
+
+export async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const refreshToken = getRefreshTokenCookie();
+  if (!refreshToken) {
+    accessTokenOverride = null;
+    clearRefreshTokenCookie();
+    await signOut({ callbackUrl: `/${defaultLocale}/login` });
+    return null;
+  }
+
+  try {
+    const refreshed = await refreshTokens({ refreshToken });
+    const { accessToken, refreshToken: nextRefreshToken } =
+      parseTokenResponse(refreshed);
+
+    if (!accessToken) {
+      throw new Error("No access token returned");
+    }
+
+    accessTokenOverride = accessToken;
+
+    if (nextRefreshToken && nextRefreshToken !== refreshToken) {
+      setRefreshTokenCookie(nextRefreshToken);
+    }
+
+    return accessToken;
+  } catch {
+    accessTokenOverride = null;
+    clearRefreshTokenCookie();
+    await signOut({ callbackUrl: `/${defaultLocale}/login` });
+    return null;
+  }
+}
+
 axiosInstance.interceptors.request.use(
   async (config) => {
     if (typeof window !== "undefined") {
       const session = (await getSession()) as SessionLike | null;
       const token = getAccessToken(session);
+      const refreshToken = getRefreshTokenCookie();
+
+      if (!refreshToken) {
+        accessTokenOverride = null;
+        await signOut({ callbackUrl: `/${defaultLocale}/login` });
+        return Promise.reject(new Error("Missing refresh token cookie"));
+      }
+
       if (token) {
         setAuthHeader(config, token);
       }
@@ -126,27 +239,19 @@ axiosInstance.interceptors.response.use(
     const original = error.config as RetryableRequest | undefined;
     const status = error.response?.status;
 
-    if (
-      status === 401 &&
-      original &&
-      !original._retry &&
-      typeof window !== "undefined"
-    ) {
+    if (status === 401 && original && !original._retry && typeof window !== "undefined") {
       original._retry = true;
-      const newSession = (await getSession()) as SessionLike | null;
-      if (newSession?.error === "RefreshAccessTokenError") {
-        await signOut({ callbackUrl: `/${defaultLocale}/login` });
-        return Promise.reject(error);
-      }
-
-      const newToken = getAccessToken(newSession);
-      if (newToken) {
-        setAuthHeader(original, newToken);
+      const accessToken = await refreshAccessToken();
+      if (accessToken) {
+        setAuthHeader(original, accessToken);
         return axiosInstance(original);
       }
+      return Promise.reject(error);
     }
 
     if (status === 401 && typeof window !== "undefined") {
+      accessTokenOverride = null;
+      clearRefreshTokenCookie();
       await signOut({ callbackUrl: `/${defaultLocale}/login` });
     }
 
@@ -211,8 +316,10 @@ export async function resetPassword(
   return res.data;
 }
 
-export async function getBooks() {
-  const res = await axiosPublic.get<UnknownRecord>(booksPath("/get-books"));
+export async function getBooks(params?: QueryParams) {
+  const res = await axiosInstance.get<UnknownRecord>(booksPath("/get-books"), {
+    params,
+  });
   return res.data;
 }
 
@@ -223,10 +330,80 @@ export async function getBookDetails(id: string) {
   return res.data;
 }
 
+export async function getBookChapters(id: string, params?: QueryParams) {
+  const res = await axiosInstance.get<UnknownRecord>(
+    booksPath(`/chapters/${encodeURIComponent(id)}`),
+    { params }
+  );
+  return res.data;
+}
+
+export async function getBookChapterByOrder(id: string, order: number | string) {
+  const res = await axiosInstance.get<UnknownRecord>(
+    booksPath(`/chapters/${encodeURIComponent(id)}/${encodeURIComponent(String(order))}`)
+  );
+  return res.data;
+}
+
 export async function getBookAuthorDetails(id: string) {
-  const res = await axiosPublic.get<UnknownRecord>(
+  const res = await axiosInstance.get<UnknownRecord>(
     booksPath(`/get-book-author/${encodeURIComponent(id)}`)
   );
+  return res.data;
+}
+
+export async function createBook(payload: CreateBookRequest) {
+  const res = await axiosInstance.post<UnknownRecord>(
+    booksPath("/create-book"),
+    payload
+  );
+  return res.data;
+}
+
+export async function createBookChapter(bookId: string, payload: ChapterWriteRequest) {
+  const res = await axiosInstance.post<UnknownRecord>(
+    booksPath(`/create-chapter/${encodeURIComponent(bookId)}`),
+    payload
+  );
+  return res.data;
+}
+
+export async function editBookChapter(
+  bookId: string,
+  chapterId: string,
+  payload: ChapterWriteRequest
+) {
+  const res = await axiosInstance.put<UnknownRecord>(
+    booksPath(
+      `/put-chapter/${encodeURIComponent(bookId)}/${encodeURIComponent(chapterId)}`
+    ),
+    payload
+  );
+  return res.data;
+}
+
+export async function uploadFile(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await axiosInstance.post<UnknownRecord>("/upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
+  return res.data;
+}
+
+export async function getLookup(params?: QueryParams) {
+  const res = await axiosInstance.get<UnknownRecord>("/lookup", {
+    params,
+  });
+  return res.data;
+}
+
+export async function getProfile() {
+  const res = await axiosInstance.get<UnknownRecord>("/profile");
   return res.data;
 }
 
@@ -246,8 +423,10 @@ export async function rentBook(payload: BookPayload) {
   return res.data;
 }
 
-export async function getMyBooks() {
-  const res = await axiosInstance.get<UnknownRecord>(booksPath("/my-books"));
+export async function getMyBooks(params?: QueryParams) {
+  const res = await axiosInstance.get<UnknownRecord>(booksPath("/my-books"), {
+    params,
+  });
   return res.data;
 }
 

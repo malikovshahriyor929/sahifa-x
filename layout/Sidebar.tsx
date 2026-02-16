@@ -2,41 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MAIN_NAV_ITEMS, PERSONAL_NAV_ITEMS } from "../constants";
-import type { NavItem } from "../types";
-import {
-  BookmarkIcon,
-  DraftIcon,
-  HomeIcon,
-  IdeaIcon,
-  LibraryIcon,
-  SettingsIcon,
-  SparklesIcon,
-  SearchIcon,
-} from "./icons";
+import { MAIN_NAV_ITEMS, PERSONAL_NAV_ITEMS } from "@/app/shared/dashboard/constants";
+import { renderNavIcon, resolveNavHref } from "@/app/shared/dashboard/navigation";
+import type { NavItem } from "@/types";
 
 type SidebarProps = {
   locale: string;
 };
 
 function resolveHref(item: NavItem, locale: string) {
-  if (item.href) {
-    if (item.href.startsWith("/")) {
-      return item.href;
-    }
-    return `/${locale}/${item.href}`;
-  }
-
-  switch (item.icon) {
-    case "search":
-      return `/${locale}/search`;
-    default:
-      return `/${locale}/dashboard`;
-  }
+  return resolveNavHref(item, locale);
 }
 
 function isActive(item: NavItem, pathname: string, href: string, locale: string) {
   if (item.icon === "search") {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
+  if (item.icon === "idea") {
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
@@ -48,24 +31,7 @@ function isActive(item: NavItem, pathname: string, href: string, locale: string)
 }
 
 function navIcon(icon: NavItem["icon"], className: string) {
-  switch (icon) {
-    case "home":
-      return <HomeIcon className={className} />;
-    case "search":
-      return <SearchIcon className={className} />;
-    case "idea":
-      return <IdeaIcon className={className} />;
-    case "bookmark":
-      return <BookmarkIcon className={className} />;
-    case "library":
-      return <LibraryIcon className={className} />;
-    case "draft":
-      return <DraftIcon className={className} />;
-    case "settings":
-      return <SettingsIcon className={className} />;
-    default:
-      return <HomeIcon className={className} />;
-  }
+  return renderNavIcon(icon, className);
 }
 
 function NavLink({ item, href, active }: { item: NavItem; href: string; active: boolean }) {
@@ -117,7 +83,7 @@ export default function Sidebar({ locale }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="mt-auto pt-6">
+      {/* <div className="mt-auto pt-6">
         <div className="group relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-dark to-dark-900 p-4">
           <div className="absolute right-0 top-0 p-2 opacity-10 transition-opacity group-hover:opacity-20">
             <SparklesIcon className="size-14" />
@@ -133,7 +99,7 @@ export default function Sidebar({ locale }: SidebarProps) {
             Upgrade qilish
           </button>
         </div>
-      </div>
+      </div> */}
     </aside>
   );
 }

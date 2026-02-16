@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { LoginFormProps } from "@/types/auth";
+import { setRefreshTokenCookie } from "@/app/shared/authCookies";
 
 function Logo({ className }: { className?: string }) {
   return (
@@ -151,6 +152,12 @@ export default function LoginForm({ callbackUrl, locale }: LoginFormProps) {
       setError("Login yoki parol noto'g'ri.");
       setPending(false);
       return;
+    }
+
+    const session = await getSession();
+    const refreshToken = session?.user?.refreshToken;
+    if (typeof refreshToken === "string" && refreshToken.length > 0) {
+      setRefreshTokenCookie(refreshToken);
     }
 
     router.push(response.url ?? callbackUrl);

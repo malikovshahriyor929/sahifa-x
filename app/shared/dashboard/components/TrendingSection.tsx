@@ -1,12 +1,14 @@
-import type { Book } from "../types";
+import Link from "next/link";
+import type { Book } from "@/types";
 import { EyeIcon, SparklesIcon } from "./icons";
 
 type TrendingSectionProps = {
+  locale: string;
   books: Book[];
   loading: boolean;
 };
 
-export default function TrendingSection({ books, loading }: TrendingSectionProps) {
+export default function TrendingSection({ locale, books, loading }: TrendingSectionProps) {
   return (
     <section>
       <div className="mb-6 flex items-center justify-between">
@@ -28,7 +30,12 @@ export default function TrendingSection({ books, loading }: TrendingSectionProps
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {books.map((book) => (
-            <article key={book.id} className="group relative flex flex-col gap-3">
+            <Link
+              key={book.id}
+              href={`/${locale}/books/${encodeURIComponent(book.id)}`}
+              className="group relative flex flex-col gap-3"
+              aria-label={`${book.title} kitobi tafsilotlari`}
+            >
               <div className="relative aspect-[2/3] w-full overflow-hidden rounded-[20px] shadow-lg shadow-black/20">
                 <div
                   className="h-full w-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
@@ -53,11 +60,11 @@ export default function TrendingSection({ books, loading }: TrendingSectionProps
                 </div>
               </div>
 
-              <button className="absolute -bottom-14 z-20 mt-1 flex w-full translate-y-4 items-center justify-center gap-2 rounded-xl bg-dark-900 py-3 text-sm font-bold text-white opacity-0 shadow-xl shadow-black/30 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100 hover:bg-primary">
+              <span className="absolute -bottom-14 z-20 mt-1 flex w-full translate-y-4 items-center justify-center gap-2 rounded-xl bg-dark-900 py-3 text-sm font-bold text-white opacity-0 shadow-xl shadow-black/30 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100 group-hover:bg-primary">
                 <EyeIcon className="size-4" />
                 O&apos;qish
-              </button>
-            </article>
+              </span>
+            </Link>
           ))}
         </div>
       )}

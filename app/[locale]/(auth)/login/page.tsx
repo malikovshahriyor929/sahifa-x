@@ -14,7 +14,7 @@ export default async function LoginPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const callbackRaw = resolvedSearchParams?.callbackUrl;
   const callbackUrl =
-    typeof callbackRaw === "string" ? callbackRaw : `/${locale}/dashboard`;
+    typeof callbackRaw === "string" ? callbackRaw : `/${locale}/`;
 
   return <LoginForm callbackUrl={callbackUrl} locale={locale} />;
 }

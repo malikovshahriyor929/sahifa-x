@@ -1,12 +1,20 @@
-import type { CurrentUser, DashboardStats } from "../types";
+import Link from "next/link";
+import type { CurrentUser, DashboardStats } from "@/types";
 import { ArrowRightIcon, BookIcon, DraftIcon } from "./icons";
 
 type HeroProps = {
   currentUser: CurrentUser;
   stats: DashboardStats;
+  startWritingHref: string;
+  continueReadingHref: string;
 };
 
-export default function Hero({ currentUser, stats }: HeroProps) {
+export default function Hero({
+  currentUser,
+  stats,
+  startWritingHref,
+  continueReadingHref,
+}: HeroProps) {
   return (
     <section className="relative flex min-h-[260px] w-full overflow-hidden rounded-[24px] border border-primary-light/20 bg-gradient-to-br from-dark-900 to-primary-dark shadow-xl shadow-primary-dark/20">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(20,179,181,0.18),transparent_45%),radial-gradient(circle_at_90%_80%,rgba(15,141,143,0.3),transparent_50%)]" />
@@ -37,15 +45,21 @@ export default function Hero({ currentUser, stats }: HeroProps) {
         </div>
 
         <div className="flex w-full flex-wrap gap-3 md:w-auto">
-          <button className="group flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-white transition hover:bg-primary-dark md:flex-none">
+          <Link
+            href={startWritingHref}
+            className="group flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-white transition hover:bg-primary-dark md:flex-none"
+          >
             <DraftIcon className="size-4" />
             Yozishni boshlash
             <ArrowRightIcon className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </button>
-          <button className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-white/20 md:flex-none">
+          </Link>
+          <Link
+            href={continueReadingHref}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-white/20 md:flex-none"
+          >
             <BookIcon className="size-4" />
             O&apos;qishni davom ettirish
-          </button>
+          </Link>
         </div>
       </div>
     </section>

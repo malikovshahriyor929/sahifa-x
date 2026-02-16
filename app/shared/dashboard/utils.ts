@@ -1,11 +1,5 @@
-import {
-  DEFAULT_BOOK_COVER,
-  NEW_ARRIVALS,
-  TOP_AUTHORS,
-  TOP_GENRES,
-  TRENDING_BOOKS,
-} from "./constants";
-import type { ApiBookRecord, Author, Book } from "./types";
+import { DEFAULT_BOOK_COVER } from "./constants";
+import type { ApiBookRecord, Author, Book } from "@/types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -81,8 +75,26 @@ function getArrayFromPayload(payload: unknown): unknown[] {
       if (Array.isArray(candidate)) {
         return candidate;
       }
-      if (isObject(candidate) && Array.isArray(candidate.items)) {
-        return candidate.items;
+      if (isObject(candidate)) {
+        if (Array.isArray(candidate.items)) {
+          return candidate.items;
+        }
+        if (Array.isArray(candidate.data)) {
+          return candidate.data;
+        }
+        if (Array.isArray(candidate.results)) {
+          return candidate.results;
+        }
+
+        const deepCandidate = candidate.data;
+        if (isObject(deepCandidate)) {
+          if (Array.isArray(deepCandidate.items)) {
+            return deepCandidate.items;
+          }
+          if (Array.isArray(deepCandidate.data)) {
+            return deepCandidate.data;
+          }
+        }
       }
     }
   }
@@ -100,17 +112,12 @@ export function normalizeBooks(payload: unknown): Book[] {
 }
 
 export function fallbackBooks(): Book[] {
-  const merged = [...TRENDING_BOOKS, ...NEW_ARRIVALS];
-  const byId = new Map<string, Book>();
-  merged.forEach((book) => {
-    byId.set(book.id, book);
-  });
-  return [...byId.values()];
+  return [];
 }
 
 export function pickTrendingBooks(books: Book[]): Book[] {
   if (!books.length) {
-    return TRENDING_BOOKS;
+    return [];
   }
 
   return [...books]
@@ -120,7 +127,7 @@ export function pickTrendingBooks(books: Book[]): Book[] {
 
 export function pickNewArrivalBooks(books: Book[]): Book[] {
   if (!books.length) {
-    return NEW_ARRIVALS;
+    return [];
   }
 
   const sorted = [...books].sort((a, b) => {
@@ -134,7 +141,7 @@ export function pickNewArrivalBooks(books: Book[]): Book[] {
 
 export function deriveTopGenres(books: Book[]): string[] {
   if (!books.length) {
-    return TOP_GENRES;
+    return [];
   }
 
   const counts = new Map<string, number>();
@@ -151,7 +158,7 @@ export function deriveTopGenres(books: Book[]): string[] {
 
 export function deriveTopAuthors(books: Book[]): Author[] {
   if (!books.length) {
-    return TOP_AUTHORS;
+    return [];
   }
 
   const map = new Map<string, { booksCount: number; reads: number }>();
