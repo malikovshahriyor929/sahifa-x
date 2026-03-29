@@ -21,17 +21,12 @@ export function Sidebar({ author, similarBooks }: SidebarProps) {
 
         <div className="mb-4 flex items-center gap-3">
           <div
-            className="h-12 w-12 rounded-full border-2 border-primary bg-primary/10 bg-cover bg-center"
+            className="h-12 w-12 min-w-12 rounded-full border-2 border-primary bg-primary/10 bg-cover bg-center"
             style={{ backgroundImage: `url(${author.avatar})` }}
           />
           <div>
             <h4 className="text-sm font-bold text-dark-900">{author.name}</h4>
             <p className="text-xs text-dark-900/55">{author.bookCount} ta kitob</p>
-            {author.authorId ? (
-              <p className="mt-0.5 max-w-[180px] truncate text-[11px] text-dark-900/45" title={author.authorId}>
-                ID: {author.authorId}
-              </p>
-            ) : null}
           </div>
         </div>
 

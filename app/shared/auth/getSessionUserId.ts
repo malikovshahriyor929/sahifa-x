@@ -55,24 +55,24 @@ function decodeJwtPayload(token: string): UnknownRecord | null {
   }
 }
 
-export function getSessionUserId(session: unknown): string | null {
+function getSessionSources(session: unknown): UnknownRecord[] {
   if (!isRecord(session)) {
-    return null;
+    return [];
   }
 
+  const sources: UnknownRecord[] = [];
   const user = isRecord(session.user) ? session.user : null;
+
+  if (user) {
+    sources.push(user);
+  }
+  sources.push(session);
+
   const accessToken = toText(user?.accessToken);
   if (accessToken) {
     const payload = decodeJwtPayload(accessToken);
     if (payload) {
-      const tokenUserId =
-        toText(payload.id) ??
-        toText(payload.userId) ??
-        toText(payload._id) ??
-        toText(payload.sub);
-      if (tokenUserId) {
-        return tokenUserId;
-      }
+      sources.push(payload);
     }
   }
 
@@ -80,21 +80,94 @@ export function getSessionUserId(session: unknown): string | null {
   if (refreshToken) {
     const payload = decodeJwtPayload(refreshToken);
     if (payload) {
-      const tokenUserId =
-        toText(payload.id) ??
-        toText(payload.userId) ??
-        toText(payload._id) ??
-        toText(payload.sub);
-      if (tokenUserId) {
-        return tokenUserId;
-      }
+      sources.push(payload);
+    }
+  }
+
+  return sources;
+}
+
+function isTruthyFlag(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value === 1;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  }
+
+  return false;
+}
+
+function hasAuthorRole(value: unknown): boolean {
+  if (typeof value === "string") {
+    const normalized = value.trim().toUpperCase();
+    return (
+      normalized === "AUTHOR" ||
+      normalized === "WRITER" ||
+      normalized === "MUALLIF"
+    );
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasAuthorRole(item));
+  }
+
+  if (isRecord(value)) {
+    return Object.entries(value).some(
+      ([key, flag]) =>
+        isTruthyFlag(flag) &&
+        ["AUTHOR", "WRITER", "MUALLIF"].includes(key.trim().toUpperCase()),
+    );
+  }
+
+  return false;
+}
+
+export function getSessionUserId(session: unknown): string | null {
+  const sources = getSessionSources(session);
+  const sessionRecord = isRecord(session) ? session : null;
+  const user =
+    sessionRecord && isRecord(sessionRecord.user) ? sessionRecord.user : null;
+
+  if (!sessionRecord) {
+    return null;
+  }
+
+  for (const source of sources) {
+    const tokenUserId =
+      toText(source.id) ??
+      toText(source.userId) ??
+      toText(source._id) ??
+      toText(source.sub);
+    if (tokenUserId) {
+      return tokenUserId;
     }
   }
 
   return (
     toText(user?.userId) ??
     toText(user?.id) ??
-    toText((session as UnknownRecord).userId) ??
-    toText((session as UnknownRecord).id)
+    toText(sessionRecord.userId) ??
+    toText(sessionRecord.id)
   );
+}
+
+export function isSessionAuthor(session: unknown): boolean {
+  const sources = getSessionSources(session);
+
+  return sources.some((source) => {
+    if (
+      isTruthyFlag(source.is_Author) ||
+      isTruthyFlag(source.isAuthor) ||
+      isTruthyFlag(source.is_author)
+    ) {
+      return true;
+    }
+
+    return hasAuthorRole(source.role) || hasAuthorRole(source.roles);
+  });
 }

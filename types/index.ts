@@ -26,7 +26,14 @@ export interface CurrentUser {
 }
 
 export interface NavItem {
-  icon: "home" | "search" | "idea" | "bookmark" | "library" | "draft" | "settings";
+  icon:
+    | "home"
+    | "search"
+    | "idea"
+    | "bookmark"
+    | "library"
+    | "draft"
+    | "settings";
   label: string;
   active?: boolean;
   href?: string;
@@ -43,7 +50,7 @@ export type ApiBookRecord = {
   _id?: string | number;
   title?: string;
   name?: string;
-  author?: string;
+  author?: { name: string; avatar: string };
   authorName?: string;
   coverUrl?: string;
   cover?: string;

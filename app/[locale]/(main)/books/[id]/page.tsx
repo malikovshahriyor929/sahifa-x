@@ -6,7 +6,6 @@ import type { FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getSessionUserId } from "@/app/shared/auth/getSessionUserId";
-import { DEFAULT_BOOK_COVER } from "@/app/shared/dashboard/constants";
 import { normalizeBooks } from "@/app/shared/dashboard/utils";
 import RichTextEditor, {
   quillHtmlToPlainText,
@@ -17,260 +16,28 @@ import {
   getBookChapters,
   getBookDetails,
   getBooks,
+  toggleSaveBook,
 } from "@/server/api";
 import { BookHero } from "@/app/shared/books/details/components/BookHero";
 import { ChapterList } from "@/app/shared/books/details/components/ChapterList";
 import { Sidebar } from "@/app/shared/books/details/components/Sidebar";
-import type { Author, Book, Chapter, SimilarBook } from "@/app/shared/books/details/types";
+import {
+  formatRentalPrice,
+  getBookSavedState,
+  getCreatedChapterOrder,
+  getFirstChapterOrder,
+  normalizeAuthor,
+  normalizeBookDetails,
+  normalizeChapters,
+} from "@/app/shared/books/details/lib/utils";
+import type {
+  Author,
+  Book,
+  Chapter,
+  SimilarBook,
+} from "@/app/shared/books/details/types";
 
-type UnknownRecord = Record<string, unknown>;
 type ActiveTab = "description" | "chapters" | "comments";
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
-
-function toText(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function getRecordFromCandidates(payload: unknown): UnknownRecord | null {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  const record = payload as UnknownRecord;
-  const candidates = [record.data, record.book, record.item, record.result];
-
-  for (const candidate of candidates) {
-    if (isRecord(candidate)) {
-      return candidate;
-    }
-  }
-
-  return record;
-}
-
-type NormalizedBookDetails = {
-  id: string;
-  title: string;
-  description: string;
-  coverImage: string;
-  category: string;
-  language: string;
-  status: string;
-  rating: number;
-  voteCount: number;
-  rentPriceCents: number | null;
-  currency: string;
-  rentDurationDays: number | null;
-  authorName: string;
-  authorId: string | null;
-};
-
-function normalizeBookDetails(payload: unknown): NormalizedBookDetails | null {
-  const item = getRecordFromCandidates(payload);
-  if (!item) {
-    return null;
-  }
-
-  const id = toText(item.id ?? item._id);
-  if (!id) {
-    return null;
-  }
-
-  const title = toText(item.title ?? item.name) ?? "Nomsiz asar";
-  const authorName = toText(item.author ?? item.authorName) ?? "Noma'lum muallif";
-  const coverImage = toText(item.coverUrl ?? item.cover ?? item.image) ?? DEFAULT_BOOK_COVER;
-  const category = toText(item.category ?? item.genre) ?? "Boshqa";
-  const language = toText(item.language) ?? "Uzbek";
-  const status = toText(item.status) ?? "Published";
-  const rating = toNumber(item.rating) ?? 4.5;
-  const voteCount =
-    toNumber(item.voteCount ?? item.votesCount ?? item.reviewsCount ?? item.ratingsCount) ?? 0;
-  const rentPriceCents =
-    typeof item.rentPriceCents === "number" ? item.rentPriceCents : toNumber(item.rentPriceCents);
-  const rentDurationDays =
-    typeof item.rentDurationDays === "number"
-      ? item.rentDurationDays
-      : toNumber(item.rentDurationDays);
-  const currency = toText(item.currency) ?? "UZS";
-  const description =
-    toText(item.description) ?? "Ushbu kitob uchun izoh hozircha mavjud emas.";
-  const authorId = toText(item.authorId);
-
-  return {
-    id,
-    title,
-    description,
-    coverImage,
-    category,
-    language,
-    status,
-    rating,
-    voteCount,
-    rentPriceCents: typeof rentPriceCents === "number" ? rentPriceCents : null,
-    currency,
-    rentDurationDays: typeof rentDurationDays === "number" ? rentDurationDays : null,
-    authorName,
-    authorId,
-  };
-}
-
-function formatDate(value: unknown): string {
-  const raw = toText(value);
-  if (!raw) {
-    return "Noma'lum sana";
-  }
-
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    return "Noma'lum sana";
-  }
-
-  return new Intl.DateTimeFormat("uz-UZ", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
-}
-
-function formatRentalPrice(cents: number | null, currency: string, locale: string): string {
-  if (typeof cents !== "number") {
-    return `0 ${currency}`;
-  }
-
-  const amount = cents / 100;
-
-  try {
-    const localeTag = locale === "ru" ? "ru-RU" : locale === "en" ? "en-US" : "uz-UZ";
-    return new Intl.NumberFormat(localeTag, {
-      style: "currency",
-      currency,
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
-}
-
-function normalizeChapters(payload: unknown): Chapter[] {
-  if (!isRecord(payload)) {
-    return [];
-  }
-
-  const maybeData = (payload as UnknownRecord).data;
-  if (!Array.isArray(maybeData)) {
-    return [];
-  }
-
-  return maybeData
-    .filter((item): item is UnknownRecord => isRecord(item))
-    .map((item, index) => {
-      const order = toNumber(item.order) ?? index + 1;
-      const isPreview =
-        typeof item.isPreview === "boolean"
-          ? item.isPreview
-          : typeof item.is_preview === "boolean"
-            ? item.is_preview
-            : true;
-
-      return {
-        id: toText(item.id ?? item._id) ?? `chapter-${order}`,
-        order,
-        number: String(order).padStart(2, "0"),
-        title: toText(item.title) ?? `Chapter ${order}`,
-        readTime: `${Math.max(8, Math.round(10 + order * 1.5))} daqiqa o'qish`,
-        date: formatDate(item.updatedAt ?? item.createdAt),
-        isLocked: !isPreview,
-        isFree: Boolean(isPreview),
-      };
-    })
-    .sort((a, b) => a.order - b.order);
-}
-
-function getFirstChapterOrder(chapters: Chapter[]): number | null {
-  if (!chapters.length) {
-    return null;
-  }
-  return chapters[0].order;
-}
-
-function getCreatedChapterOrder(payload: unknown): number | null {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  const directOrder = toNumber((payload as UnknownRecord).order);
-  if (typeof directOrder === "number") {
-    return directOrder;
-  }
-
-  const chapterSource = isRecord((payload as UnknownRecord).chapter)
-    ? ((payload as UnknownRecord).chapter as UnknownRecord)
-    : isRecord((payload as UnknownRecord).data)
-      ? ((payload as UnknownRecord).data as UnknownRecord)
-      : null;
-
-  if (!chapterSource) {
-    return null;
-  }
-
-  return toNumber(chapterSource.order);
-}
-
-function normalizeAuthor(
-  payload: unknown,
-  fallbackName: string,
-  fallbackAuthorId: string | null
-): Author {
-  const record = getRecordFromCandidates(payload);
-  const source = record ?? {};
-
-  const name =
-    toText((source as UnknownRecord).name ?? (source as UnknownRecord).fullName ?? (source as UnknownRecord).authorName) ??
-    fallbackName;
-  const authorId =
-    fallbackAuthorId ??
-    toText(
-      (source as UnknownRecord).authorId ??
-        (source as UnknownRecord).id ??
-        (source as UnknownRecord)._id
-    );
-  const avatar =
-    toText((source as UnknownRecord).avatarUrl ?? (source as UnknownRecord).avatar ?? (source as UnknownRecord).image) ??
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      name
-    )}&background=0f8d8f&color=fff&bold=true`;
-  const bookCount = toNumber((source as UnknownRecord).bookCount ?? (source as UnknownRecord).booksCount) ?? 0;
-  const bio =
-    toText((source as UnknownRecord).bio ?? (source as UnknownRecord).description) ??
-    "Fantastika va sarguzasht janrlarida ijod qiluvchi muallif.";
-
-  return {
-    name,
-    authorId,
-    role: "Muallif",
-    bookCount,
-    avatar,
-    bio,
-  };
-}
-
 export default function BookDetailsPage() {
   const params = useParams<{ locale?: string; id?: string }>();
   const router = useRouter();
@@ -283,19 +50,26 @@ export default function BookDetailsPage() {
   const [author, setAuthor] = useState<Author | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [similarBooks, setSimilarBooks] = useState<SimilarBook[]>([]);
-  const [firstChapterOrder, setFirstChapterOrder] = useState<number | null>(null);
+  const [firstChapterOrder, setFirstChapterOrder] = useState<number | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreateChapterOpen, setIsCreateChapterOpen] = useState(false);
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const [newChapterContent, setNewChapterContent] = useState("");
   const [newChapterPreview, setNewChapterPreview] = useState(true);
-  const [chapterActionError, setChapterActionError] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingBook, setSavingBook] = useState(false);
+  const [chapterActionError, setChapterActionError] = useState<string | null>(
+    null,
+  );
   const [creatingChapter, setCreatingChapter] = useState(false);
 
   useEffect(() => {
     if (!bookId) {
       setError("Kitob ID topilmadi.");
+      setIsSaved(false);
       setLoading(false);
       return;
     }
@@ -305,13 +79,15 @@ export default function BookDetailsPage() {
     async function loadBook() {
       setLoading(true);
       setError(null);
+      setIsSaved(false);
 
       try {
-        const [detailsPayload, chaptersPayload, booksPayload] = await Promise.all([
-          getBookDetails(bookId),
-          getBookChapters(bookId, { page: 1, per_page: 100 }),
-          getBooks({ page: 1, perPage: 20 }).catch(() => null),
-        ]);
+        const [detailsPayload, chaptersPayload, booksPayload] =
+          await Promise.all([
+            getBookDetails(bookId),
+            getBookChapters(bookId, { page: 1, per_page: 100 }),
+            getBooks({ page: 1, perPage: 20 }).catch(() => null),
+          ]);
         if (!active) {
           return;
         }
@@ -324,6 +100,7 @@ export default function BookDetailsPage() {
           setChapters([]);
           setSimilarBooks([]);
           setFirstChapterOrder(null);
+          setIsSaved(false);
           return;
         }
 
@@ -361,25 +138,27 @@ export default function BookDetailsPage() {
           price: formatRentalPrice(
             normalizedDetails.rentPriceCents,
             normalizedDetails.currency,
-            locale
+            locale,
           ),
+          isAuthor: normalizedDetails.isAuthor,
           rentalPeriod:
             typeof normalizedDetails.rentDurationDays === "number"
               ? `${normalizedDetails.rentDurationDays} kun`
               : "14 kun",
         };
 
-        setBook(normalizedBook);
-        setAuthor(
-          normalizeAuthor(
-            authorPayload,
-            normalizedDetails.authorName,
-            normalizedDetails.authorId
-          )
+        const normalizedAuthor = normalizeAuthor(
+          authorPayload,
+          normalizedDetails.authorName,
+          normalizedDetails.authorId,
         );
+
+        setBook(normalizedBook);
+        setAuthor(normalizedAuthor);
         setChapters(normalizedChapters);
         setSimilarBooks(similar);
         setFirstChapterOrder(firstChapter);
+        setIsSaved(getBookSavedState(authorPayload, normalizedDetails.isSaved));
       } catch {
         if (!active) {
           return;
@@ -390,6 +169,7 @@ export default function BookDetailsPage() {
         setChapters([]);
         setSimilarBooks([]);
         setFirstChapterOrder(null);
+        setIsSaved(false);
       } finally {
         if (active) {
           setLoading(false);
@@ -422,17 +202,40 @@ export default function BookDetailsPage() {
   }, [chapters]);
 
   const currentUserId = getSessionUserId(session);
-  const isOwner = Boolean(currentUserId && author?.authorId && currentUserId === author.authorId);
+  const isOwner = Boolean(
+    currentUserId && author?.authorId && currentUserId === author.authorId,
+  );
+  const canManageChapters = Boolean(book?.isAuthor || isOwner);
+  const showSaveButton = Boolean(book && !book.isAuthor && !isOwner);
 
   function goToChapter(order: number) {
     if (!bookId) {
       return;
     }
-    router.push(`/${locale}/books/${encodeURIComponent(bookId)}/${encodeURIComponent(String(order))}`);
+    router.push(
+      `/${locale}/books/${encodeURIComponent(bookId)}/${encodeURIComponent(String(order))}`,
+    );
   }
 
   function goToRead() {
     goToChapter(resolvedFirstChapter);
+  }
+
+  async function handleToggleSave() {
+    if (!bookId || savingBook) {
+      return;
+    }
+
+    setSavingBook(true);
+
+    try {
+      const payload = await toggleSaveBook(bookId);
+      setIsSaved((current) => getBookSavedState(payload, !current));
+    } catch {
+      return;
+    } finally {
+      setSavingBook(false);
+    }
   }
 
   function openCreateChapterDialog() {
@@ -476,7 +279,10 @@ export default function BookDetailsPage() {
 
       let targetOrder = getCreatedChapterOrder(payload);
       if (typeof targetOrder !== "number") {
-        const chaptersPayload = await getBookChapters(bookId, { page: 1, per_page: 100 });
+        const chaptersPayload = await getBookChapters(bookId, {
+          page: 1,
+          per_page: 100,
+        });
         const normalized = normalizeChapters(chaptersPayload);
         if (normalized.length > 0) {
           setChapters(normalized);
@@ -486,11 +292,15 @@ export default function BookDetailsPage() {
 
       if (typeof targetOrder === "number") {
         setIsCreateChapterOpen(false);
-        router.push(`/${locale}/books/${encodeURIComponent(bookId)}/${encodeURIComponent(String(targetOrder))}`);
+        router.push(
+          `/${locale}/books/${encodeURIComponent(bookId)}/${encodeURIComponent(String(targetOrder))}`,
+        );
         return;
       }
 
-      setChapterActionError("Chapter yaratildi, lekin order topilmadi. Sahifani yangilang.");
+      setChapterActionError(
+        "Chapter yaratildi, lekin order topilmadi. Sahifani yangilang.",
+      );
     } catch {
       setChapterActionError("Chapter yaratib bo'lmadi. Qayta urinib ko'ring.");
     } finally {
@@ -525,19 +335,27 @@ export default function BookDetailsPage() {
     <div className="min-h-full bg-[linear-gradient(180deg,#f3fbfb_0%,#f7fbfb_100%)] text-dark-900">
       <div className="mx-auto max-w-[1200px] px-6 pb-12 pt-6">
         <nav className="flex text-sm font-medium text-dark-900/55">
-          <Link href={`/${locale}`} className="transition-colors hover:text-primary">
+          <Link
+            href={`/${locale}`}
+            className="transition-colors hover:text-primary"
+          >
             Asosiy
           </Link>
           <span className="mx-2">/</span>
-          <Link href={`/${locale}/search`} className="transition-colors hover:text-primary">
+          <Link
+            href={`/${locale}/search`}
+            className="transition-colors hover:text-primary"
+          >
             Kitoblar
           </Link>
           <span className="mx-2">/</span>
-          <span className="max-w-[220px] truncate text-dark-900">{book.title}</span>
+          <span className="max-w-[220px] truncate text-dark-900">
+            {book.title}
+          </span>
         </nav>
       </div>
 
-      <main className="mx-auto flex max-w-[1200px] flex-col gap-10 px-6 pb-12">
+      <main className="mx-auto flex max-w-[1200px] flex-col gap-4 h-fit px-6 pb-">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
           <div className="md:col-span-4 lg:col-span-3">
             <div className="group relative w-full overflow-hidden rounded-[20px] border border-primary-light/20 shadow-2xl shadow-black/10">
@@ -556,11 +374,14 @@ export default function BookDetailsPage() {
           <div className="md:col-span-8 lg:col-span-6">
             <BookHero
               book={book}
-              author={author}
               onRead={goToRead}
-              canManageChapters={isOwner}
+              canManageChapters={canManageChapters}
               onAddChapter={openCreateChapterDialog}
               creatingChapter={creatingChapter}
+              showSaveButton={showSaveButton}
+              isSaved={isSaved}
+              savingSave={savingBook}
+              onToggleSave={handleToggleSave}
             />
           </div>
 
@@ -568,8 +389,7 @@ export default function BookDetailsPage() {
             <Sidebar author={author} similarBooks={similarBooks} />
           </div>
         </div>
-
-        <div className="grid grid-cols-1 gap-8 pb-12 md:grid-cols-12">
+        <div className="grid grid-cols-1 gap-8 pb- md:grid-cols-12">
           <div className="md:col-span-8 lg:col-span-9">
             <div className="mb-6 flex items-center gap-6 overflow-x-auto border-b border-primary-light/20">
               <button
@@ -616,12 +436,15 @@ export default function BookDetailsPage() {
             <div className="min-h-[300px]">
               {activeTab === "description" ? (
                 <div className="animate-in fade-in rounded-2xl border border-primary-light/20 bg-white p-6 duration-300 shadow-sm shadow-black/5">
-                  <h3 className="mb-4 text-xl font-bold text-dark-900">Annotatsiya</h3>
-                  <p className="mb-4 leading-relaxed text-dark-900/75">{book.description}</p>
+                  <h3 className="mb-4 text-xl font-bold text-dark-900">
+                    Annotatsiya
+                  </h3>
+                  <p className="mb-4 leading-relaxed text-dark-900/75">
+                    {book.description}
+                  </p>
                   <p className="leading-relaxed text-dark-900/75">
-                    Ushbu asar {author.name} tomonidan yozilgan bo&apos;lib, asosiy yo&apos;nalishlari:
-                    {" "}
-                    {book.genres.join(", ")}.
+                    Ushbu asar {author.name} tomonidan yozilgan bo&apos;lib,
+                    asosiy yo&apos;nalishlari: {book.genres.join(", ")}.
                   </p>
                 </div>
               ) : null}
@@ -649,14 +472,19 @@ export default function BookDetailsPage() {
       {isCreateChapterOpen ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 py-6">
           <div className="w-full max-w-2xl rounded-2xl border border-primary-light/20 bg-white p-6 shadow-2xl shadow-black/20">
-            <h3 className="text-xl font-bold text-dark-900">Yangi chapter qo&apos;shish</h3>
+            <h3 className="text-xl font-bold text-dark-900">
+              Yangi chapter qo&apos;shish
+            </h3>
             <p className="mt-1 text-sm text-dark-900/55">
               Order avtomatik qo&apos;shiladi. Faqat sarlavha va matn kiriting.
             </p>
 
             <form onSubmit={handleCreateChapter} className="mt-5 space-y-4">
               <div className="space-y-1.5">
-                <label htmlFor="new-chapter-title" className="text-sm font-medium text-dark-900/70">
+                <label
+                  htmlFor="new-chapter-title"
+                  className="text-sm font-medium text-dark-900/70"
+                >
                   Sarlavha
                 </label>
                 <input
@@ -668,7 +496,10 @@ export default function BookDetailsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="new-chapter-content" className="text-sm font-medium text-dark-900/70">
+                <label
+                  htmlFor="new-chapter-content"
+                  className="text-sm font-medium text-dark-900/70"
+                >
                   Matn
                 </label>
                 <RichTextEditor
@@ -682,7 +513,9 @@ export default function BookDetailsPage() {
                 <input
                   type="checkbox"
                   checked={newChapterPreview}
-                  onChange={(event) => setNewChapterPreview(event.target.checked)}
+                  onChange={(event) =>
+                    setNewChapterPreview(event.target.checked)
+                  }
                   className="size-4 accent-primary"
                 />
                 Preview sifatida ochiq bo&apos;lsin

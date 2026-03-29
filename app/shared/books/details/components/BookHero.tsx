@@ -1,26 +1,32 @@
 import { BsFillTagFill } from "react-icons/bs";
-import { FaBookmark, FaCartShopping, FaShareNodes, FaStar } from "react-icons/fa6";
+import { FaBookmark, FaCartShopping, FaShareNodes } from "react-icons/fa6";
 import { MdAdd, MdVerified } from "react-icons/md";
-import type { Author, Book } from "../types";
+import type { Book } from "../types";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 
 type BookHeroProps = {
   book: Book;
-  author: Author;
   onRead: () => void;
   canManageChapters?: boolean;
   onAddChapter?: () => void;
   creatingChapter?: boolean;
+  showSaveButton?: boolean;
+  isSaved?: boolean;
+  savingSave?: boolean;
+  onToggleSave?: () => void;
 };
 
 export function BookHero({
   book,
-  author,
   onRead,
   canManageChapters = false,
   onAddChapter,
   creatingChapter = false,
+  showSaveButton = true,
+  isSaved = false,
+  savingSave = false,
+  onToggleSave,
 }: BookHeroProps) {
   return (
     <div className="flex flex-col gap-6">
@@ -43,7 +49,7 @@ export function BookHero({
         <h1 className="mb-2 text-3xl font-bold leading-tight text-dark-900 md:text-5xl">
           {book.title}
         </h1>
-        <div className="mb-6 mt-4 flex items-center gap-3 text-dark-900/55">
+        {/* <div className="mb-6 mt-4 flex items-center gap-3 text-dark-900/55">
           <div
             className="h-8 w-8 rounded-full border border-primary-light/30 bg-cover bg-center"
             style={{ backgroundImage: `url(${author.avatar})` }}
@@ -55,7 +61,7 @@ export function BookHero({
             <span className="font-bold text-dark-900">{book.rating.toFixed(1)}</span>
             <span className="text-sm text-dark-900/45">({book.voteCount} ovoz)</span>
           </div>
-        </div>
+        </div> */}
 
         <p className="mb-6 border-l-2 border-primary pl-4 text-lg leading-relaxed text-dark-900/70 italic">
           {book.description}
@@ -104,9 +110,25 @@ export function BookHero({
             <FaCartShopping className="transition-transform group-hover:translate-x-0.5" />
             Ijara va O&apos;qish
           </Button>
-          <Button variant="secondary" size="icon" aria-label="Saqlash">
-            <FaBookmark />
-          </Button>
+          {showSaveButton ? (
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label={isSaved ? "Saqlangan kitobni olib tashlash" : "Saqlash"}
+              aria-pressed={isSaved}
+              aria-busy={savingSave}
+              title={isSaved ? "Saqlangan" : "Saqlash"}
+              onClick={onToggleSave}
+              disabled={savingSave}
+              className={
+                isSaved
+                  ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                  : undefined
+              }
+            >
+              <FaBookmark />
+            </Button>
+          ) : null}
           <Button variant="secondary" size="icon" aria-label="Ulashish">
             <FaShareNodes />
           </Button>

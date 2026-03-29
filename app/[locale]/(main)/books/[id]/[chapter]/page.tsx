@@ -27,6 +27,7 @@ import {
   DEFAULT_AUTHOR_NOTE,
   DEFAULT_READING_SETTINGS,
 } from "@/app/shared/books/reader/constants";
+import { getCreatedChapterOrder } from "@/app/shared/books/details/lib/utils";
 import type {
   Chapter,
   ChapterDetail,
@@ -218,29 +219,6 @@ function formatChapterCardTitle(order: number, rawTitle: string): string {
   return cleanTitle ? `${order}-bob: ${cleanTitle}` : `${order}-bob`;
 }
 
-function getCreatedChapterOrder(payload: unknown): number | null {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  const directOrder = toNumber((payload as UnknownRecord).order);
-  if (typeof directOrder === "number") {
-    return directOrder;
-  }
-
-  const chapterSource = isRecord((payload as UnknownRecord).chapter)
-    ? ((payload as UnknownRecord).chapter as UnknownRecord)
-    : isRecord((payload as UnknownRecord).data)
-      ? ((payload as UnknownRecord).data as UnknownRecord)
-      : null;
-
-  if (!chapterSource) {
-    return null;
-  }
-
-  return toNumber(chapterSource.order);
-}
-
 export default function BookChapterReaderPage() {
   const params = useParams<{ locale?: string; id?: string; chapter?: string }>();
   const router = useRouter();
@@ -364,6 +342,7 @@ export default function BookChapterReaderPage() {
 
     async function loadChapter() {
       setLoadingDetail(true);
+      setError(null);
 
       try {
         const payload = await getBookChapterByOrder(bookId, currentChapter);
@@ -375,21 +354,16 @@ export default function BookChapterReaderPage() {
         const normalizedChapter = normalizeChapterDetail(payload, currentChapter, bookId);
         if (!normalizedChapter) {
           setError("Bob ma'lumotlari noto'g'ri formatda keldi.");
-          setChapterDetail(null);
-          setChapterNavigation(EMPTY_NAVIGATION);
           return;
         }
 
         setChapterDetail(normalizedChapter);
         setChapterNavigation(normalizeChapterNavigation(payload));
-        setError(null);
       } catch {
         if (!active) {
           return;
         }
         setError("Bob ma'lumotlarini yuklab bo'lmadi.");
-        setChapterDetail(null);
-        setChapterNavigation(EMPTY_NAVIGATION);
       } finally {
         if (active) {
           setLoadingDetail(false);
@@ -426,9 +400,13 @@ export default function BookChapterReaderPage() {
     return map;
   }, [chapters]);
 
+  const activeChapterOrder = chapterDetail?.order ?? currentChapter;
   const rawCurrentTitle =
-    chapterDetail?.title ?? chapterTitleMap.get(currentChapter) ?? `${bookMeta.title} - ${currentChapter}-bob`;
-  const currentTitle = stripChapterPrefix(rawCurrentTitle, currentChapter) || rawCurrentTitle;
+    chapterDetail?.title ??
+    chapterTitleMap.get(activeChapterOrder) ??
+    `${bookMeta.title} - ${activeChapterOrder}-bob`;
+  const currentTitle =
+    stripChapterPrefix(rawCurrentTitle, activeChapterOrder) || rawCurrentTitle;
 
   const prevTitle =
     chapterNavigation.prev !== null ? chapterTitleMap.get(chapterNavigation.prev) ?? "" : "";
@@ -442,7 +420,8 @@ export default function BookChapterReaderPage() {
     return Math.max(...chapters.map((chapter) => chapter.order)) + 1;
   }, [chapters, currentChapter]);
 
-  const isLoading = loadingChapters || loadingDetail;
+  const showContentSkeleton = loadingDetail && !chapterDetail;
+  const showContentRefresh = loadingDetail && chapterDetail !== null;
   const currentUserId = getSessionUserId(session);
   const isOwner = Boolean(currentUserId && bookMeta.authorId && currentUserId === bookMeta.authorId);
   const isDarkTheme = theme === "dark";
@@ -631,7 +610,7 @@ export default function BookChapterReaderPage() {
       <Header
         locale={locale}
         bookId={bookId}
-        chapterOrder={currentChapter}
+        chapterOrder={activeChapterOrder}
         chapterTitle={currentTitle}
         fontSize={fontSize}
         setFontSize={setFontSize}
@@ -670,7 +649,7 @@ export default function BookChapterReaderPage() {
           >
             <div className="mb-12 text-center">
               <span className="mb-3 block animate-fade-in text-xs font-bold uppercase tracking-[0.18em] text-primary sm:text-sm">
-                {currentChapter}-BOB
+                {activeChapterOrder}-BOB
               </span>
               <h2 className={`mb-7 text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl ${titleClass}`}>
                 {currentTitle}
@@ -684,7 +663,7 @@ export default function BookChapterReaderPage() {
               </div>
             ) : null}
 
-            {isLoading ? (
+            {showContentSkeleton ? (
               <div className="space-y-4 pb-20">
                 {Array.from({ length: 8 }).map((_, index) => (
                   <div
@@ -787,9 +766,24 @@ export default function BookChapterReaderPage() {
                     </button>
                   </div>
                 </div>
-
               </>
             )}
+
+            {showContentRefresh ? (
+              <div className="pointer-events-none absolute inset-x-6 top-28 z-20 flex justify-center sm:inset-x-8">
+                <div
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold shadow-sm backdrop-blur ${
+                    isDarkTheme
+                      ? "border-white/10 bg-[#102122]/85 text-slate-200"
+                      : isSepiaTheme
+                        ? "border-amber-200 bg-[#fff8eb]/90 text-[#5f4b33]"
+                        : "border-primary-light/20 bg-white/90 text-dark-900/70"
+                  }`}
+                >
+                  Bob yangilanmoqda...
+                </div>
+              </div>
+            ) : null}
           </div>
         </main>
 

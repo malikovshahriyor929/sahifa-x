@@ -8,8 +8,9 @@ import { normalizeBooks } from "@/app/shared/dashboard/utils";
 import { FilterIcon, SearchIcon } from "@/app/shared/icons";
 import type { Book } from "@/types";
 
-const FILTER_TAGS = [
+const CATEGORY_OPTIONS = [
   "Barchasi",
+  "Dasturlash",
   "Manga",
   "Fantastika",
   "Detektiv",
@@ -18,9 +19,32 @@ const FILTER_TAGS = [
   "Drama",
 ];
 
-const LANGUAGES = ["O'zbekcha", "Russian", "English", "Qaraqalpaq"];
+const LANGUAGE_OPTIONS = ["Barchasi", "O'zbekcha", "Russian", "English", "Qaraqalpaq"];
+const STATUS_OPTIONS = [
+  { label: "Barchasi", value: "barchasi" },
+  { label: "Tugallangan", value: "tugallangan" },
+  { label: "Davom etmoqda", value: "davom etmoqda" },
+] as const;
 
 const PER_PAGE = 10;
+
+type SearchFilters = {
+  search: string;
+  category: string;
+  language: string;
+  status: string;
+  minPages: string;
+  maxPages: string;
+};
+
+const DEFAULT_FILTERS: SearchFilters = {
+  search: "",
+  category: "Barchasi",
+  language: "Barchasi",
+  status: "barchasi",
+  minPages: "0",
+  maxPages: "500",
+};
 
 function mergeBooks(existing: Book[], incoming: Book[]) {
   const byId = new Map<string, Book>();
@@ -30,10 +54,37 @@ function mergeBooks(existing: Book[], incoming: Book[]) {
   return [...byId.values()];
 }
 
+function parsePagesValue(value: string, fallback: number) {
+  const digits = value.replace(/[^\d]/g, "");
+  if (!digits) {
+    return fallback;
+  }
+
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function buildBookParams(filters: SearchFilters, page: number) {
+  const minPages = parsePagesValue(filters.minPages, 0);
+  const maxPages = Math.max(minPages, parsePagesValue(filters.maxPages, 500));
+
+  return {
+    search: filters.search.trim(),
+    status: filters.status || DEFAULT_FILTERS.status,
+    minPages,
+    maxPages,
+    page,
+    perPage: PER_PAGE,
+    ...(filters.category !== DEFAULT_FILTERS.category ? { category: filters.category } : {}),
+    ...(filters.language !== DEFAULT_FILTERS.language ? { language: filters.language } : {}),
+  };
+}
+
 export default function SearchContent() {
   const params = useParams<{ locale?: string }>();
   const locale = typeof params?.locale === "string" ? params.locale : "uz";
-  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
   const [books, setBooks] = useState<Book[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -42,9 +93,9 @@ export default function SearchContent() {
   const [error, setError] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const requestIdRef = useRef(0);
-  const skipInitialQueryRef = useRef(true);
+  const skipInitialFilterSyncRef = useRef(true);
 
-  const fetchBooks = useCallback(async (nextPage: number, nextQuery: string, append: boolean) => {
+  const fetchBooks = useCallback(async (nextPage: number, nextFilters: SearchFilters, append: boolean) => {
     const requestId = ++requestIdRef.current;
     setError(null);
     if (append) {
@@ -54,11 +105,7 @@ export default function SearchContent() {
     }
 
     try {
-      const payload = await getBooks({
-        search: nextQuery.trim(),
-        page: nextPage,
-        perPage: PER_PAGE,
-      });
+      const payload = await getBooks(buildBookParams(nextFilters, nextPage));
       const normalized = normalizeBooks(payload);
 
       if (requestIdRef.current !== requestId) {
@@ -86,25 +133,35 @@ export default function SearchContent() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchBooks(1, query, false);
-  }, [fetchBooks]);
+  function updateFilter<K extends keyof SearchFilters>(key: K, value: SearchFilters[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function applyFilters(nextFilters: SearchFilters) {
+    setAppliedFilters({ ...nextFilters });
+  }
+
+  function resetFilters() {
+    setFilters({ ...DEFAULT_FILTERS });
+    setAppliedFilters({ ...DEFAULT_FILTERS });
+  }
 
   useEffect(() => {
-    if (skipInitialQueryRef.current) {
-      skipInitialQueryRef.current = false;
+    fetchBooks(1, appliedFilters, false);
+  }, [appliedFilters, fetchBooks]);
+
+  useEffect(() => {
+    if (skipInitialFilterSyncRef.current) {
+      skipInitialFilterSyncRef.current = false;
       return;
     }
 
     const handler = setTimeout(() => {
-      setPage(1);
-      setHasMore(true);
-      setBooks([]);
-      fetchBooks(1, query, false);
+      applyFilters(filters);
     }, 400);
 
     return () => clearTimeout(handler);
-  }, [fetchBooks, query]);
+  }, [filters]);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -116,7 +173,7 @@ export default function SearchContent() {
       (entries) => {
         const entry = entries[0];
         if (entry.isIntersecting && hasMore && !loading && !loadingMore) {
-          fetchBooks(page, query, true);
+          fetchBooks(page, appliedFilters, true);
         }
       },
       { rootMargin: "200px 0px" }
@@ -124,7 +181,7 @@ export default function SearchContent() {
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [fetchBooks, hasMore, loading, loadingMore, page, query]);
+  }, [appliedFilters, fetchBooks, hasMore, loading, loadingMore, page]);
 
   return (
     <div className="flex h-full">
@@ -143,27 +200,33 @@ export default function SearchContent() {
                 type="text"
                 className="block w-full rounded-[20px] border border-primary-light/20 bg-white py-5 pl-16 pr-6 text-lg text-dark-900 shadow-xl shadow-black/5 outline-none transition-all placeholder:text-dark-900/50 focus:border-primary focus:ring-2 focus:ring-primary/40"
                 placeholder="Kitob, muallif yoki janr qidiring..."
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                value={filters.search}
+                onChange={(event) => updateFilter("search", event.target.value)}
               />
             </div>
           </div>
 
           <div className="mb-10">
             <div className="flex items-center gap-3 overflow-x-auto pb-2">
-              {FILTER_TAGS.map((tag, index) => (
+              {CATEGORY_OPTIONS.map((tag) => {
+                const isActive = filters.category === tag;
+
+                return (
                 <button
                   key={tag}
                   type="button"
+                  aria-pressed={isActive}
+                  onClick={() => updateFilter("category", tag)}
                   className={`whitespace-nowrap rounded-full border px-5 py-2.5 text-sm font-semibold transition ${
-                    index === 0
+                    isActive
                       ? "border-primary bg-primary text-white"
                       : "border-primary-light/30 bg-white text-dark-900/75 hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
                   }`}
                 >
                   {tag}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -219,7 +282,11 @@ export default function SearchContent() {
             <FilterIcon className="size-5 text-primary" />
             Filtrlar
           </h3>
-          <button type="button" className="text-sm font-semibold text-primary hover:text-primary-dark">
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="text-sm font-semibold text-primary hover:text-primary-dark"
+          >
             Tozalash
           </button>
         </div>
@@ -227,82 +294,91 @@ export default function SearchContent() {
         <div className="mb-10">
           <h4 className="mb-4 text-xs font-bold uppercase tracking-widest text-dark-900/40">Holati</h4>
           <div className="space-y-3">
-            <label className="group flex cursor-pointer items-center gap-3">
-              <div className="relative flex items-center">
-                <input
-                  type="radio"
-                  name="status"
-                  defaultChecked
-                  className="peer size-5 appearance-none rounded-full border border-primary/40 bg-transparent checked:border-primary checked:ring-1 checked:ring-primary checked:ring-offset-2 checked:ring-offset-white"
-                />
-                <div className="absolute inset-0 m-auto size-2.5 rounded-full bg-primary opacity-0 transition-opacity peer-checked:opacity-100" />
-              </div>
-              <span className="text-sm font-medium text-dark-900/80 transition-colors group-hover:text-primary">
-                Barchasi
-              </span>
-            </label>
-            <label className="group flex cursor-pointer items-center gap-3">
-              <div className="relative flex items-center">
-                <input
-                  type="radio"
-                  name="status"
-                  className="peer size-5 appearance-none rounded-full border border-primary/40 bg-transparent checked:border-primary checked:ring-1 checked:ring-primary checked:ring-offset-2 checked:ring-offset-white"
-                />
-                <div className="absolute inset-0 m-auto size-2.5 rounded-full bg-primary opacity-0 transition-opacity peer-checked:opacity-100" />
-              </div>
-              <span className="text-sm font-medium text-dark-900/80 transition-colors group-hover:text-primary">
-                Tugallangan
-              </span>
-            </label>
-            <label className="group flex cursor-pointer items-center gap-3">
-              <div className="relative flex items-center">
-                <input
-                  type="radio"
-                  name="status"
-                  className="peer size-5 appearance-none rounded-full border border-primary/40 bg-transparent checked:border-primary checked:ring-1 checked:ring-primary checked:ring-offset-2 checked:ring-offset-white"
-                />
-                <div className="absolute inset-0 m-auto size-2.5 rounded-full bg-primary opacity-0 transition-opacity peer-checked:opacity-100" />
-              </div>
-              <span className="text-sm font-medium text-dark-900/80 transition-colors group-hover:text-primary">
-                Davom etmoqda
-              </span>
-            </label>
+            {STATUS_OPTIONS.map((option) => (
+              <label key={option.value} className="group flex cursor-pointer items-center gap-3">
+                <div className="relative flex items-center">
+                  <input
+                    type="radio"
+                    name="status"
+                    value={option.value}
+                    checked={filters.status === option.value}
+                    onChange={(event) => updateFilter("status", event.target.value)}
+                    className="peer size-5 appearance-none rounded-full border border-primary/40 bg-transparent checked:border-primary checked:ring-1 checked:ring-primary checked:ring-offset-2 checked:ring-offset-white"
+                  />
+                  <div className="absolute inset-0 m-auto size-2.5 rounded-full bg-primary opacity-0 transition-opacity peer-checked:opacity-100" />
+                </div>
+                <span className="text-sm font-medium text-dark-900/80 transition-colors group-hover:text-primary">
+                  {option.label}
+                </span>
+              </label>
+            ))}
           </div>
         </div>
 
         <div className="mb-10">
           <div className="mb-4 flex items-center justify-between">
             <h4 className="text-xs font-bold uppercase tracking-widest text-dark-900/40">Sahifalar soni</h4>
-            <span className="text-xs font-bold text-primary">0 - 500+</span>
+            <span className="text-xs font-bold text-primary">
+              {parsePagesValue(filters.minPages, 0)} - {Math.max(
+                parsePagesValue(filters.minPages, 0),
+                parsePagesValue(filters.maxPages, 500)
+              )}
+            </span>
           </div>
-          <div className="relative mt-2 h-1.5 w-full rounded-full bg-primary/15">
-            <div className="absolute h-full w-3/4 rounded-full bg-primary" />
-            <div className="absolute left-0 top-1/2 size-4 -translate-y-1/2 rounded-full border-2 border-primary bg-white shadow-lg" />
-            <div className="absolute left-3/4 top-1/2 size-4 -translate-y-1/2 rounded-full border-2 border-primary bg-white shadow-lg" />
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold text-dark-900/50">Min</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={filters.minPages}
+                onChange={(event) => updateFilter("minPages", event.target.value)}
+                className="w-full rounded-2xl border border-primary-light/20 bg-white px-4 py-3 text-sm text-dark-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold text-dark-900/50">Max</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={filters.maxPages}
+                onChange={(event) => updateFilter("maxPages", event.target.value)}
+                className="w-full rounded-2xl border border-primary-light/20 bg-white px-4 py-3 text-sm text-dark-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25"
+              />
+            </label>
           </div>
         </div>
 
         <div className="mb-10">
           <h4 className="mb-4 text-xs font-bold uppercase tracking-widest text-dark-900/40">Til</h4>
           <div className="grid grid-cols-2 gap-2">
-            {LANGUAGES.map((language, index) => (
-              <button
-                key={language}
-                type="button"
-                className={`rounded-xl border px-4 py-2 text-xs font-bold transition-all ${
-                  index === 0
-                    ? "border-primary bg-primary text-white shadow-lg shadow-primary/20"
-                    : "border-primary-light/30 bg-transparent text-dark-900/65 hover:border-primary/50 hover:text-primary"
-                }`}
-              >
-                {language}
-              </button>
-            ))}
+            {LANGUAGE_OPTIONS.map((language) => {
+              const isActive = filters.language === language;
+
+              return (
+                <button
+                  key={language}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => updateFilter("language", language)}
+                  className={`rounded-xl border px-4 py-2 text-xs font-bold transition-all ${
+                    isActive
+                      ? "border-primary bg-primary text-white shadow-lg shadow-primary/20"
+                      : "border-primary-light/30 bg-transparent text-dark-900/65 hover:border-primary/50 hover:text-primary"
+                  }`}
+                >
+                  {language}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <button
           type="button"
+          onClick={() => applyFilters(filters)}
           className="w-full rounded-2xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-dark active:scale-[0.98]"
         >
           Natijalarni ko&apos;rish

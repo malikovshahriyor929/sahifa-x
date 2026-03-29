@@ -347,7 +347,7 @@ export async function getBookChapterByOrder(id: string, order: number | string) 
 
 export async function getBookAuthorDetails(id: string) {
   const res = await axiosInstance.get<UnknownRecord>(
-    booksPath(`/get-book-author/${encodeURIComponent(id)}`)
+    (`/author/get-author/${encodeURIComponent(id)}`)
   );
   return res.data;
 }
@@ -419,6 +419,13 @@ export async function rentBook(payload: BookPayload) {
   const res = await axiosInstance.post<UnknownRecord>(
     booksPath("/rent-book"),
     payload
+  );
+  return res.data;
+}
+
+export async function toggleSaveBook(bookId: string) {
+  const res = await axiosInstance.post<UnknownRecord>(
+    booksPath(`/save-book/${encodeURIComponent(bookId)}`)
   );
   return res.data;
 }

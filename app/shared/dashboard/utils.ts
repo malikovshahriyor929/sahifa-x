@@ -46,7 +46,7 @@ function normalizeOneBook(item: ApiBookRecord, index: number): Book {
   return {
     id: toStringId(item.id ?? item._id, `book-${index + 1}`),
     title: toText(item.title ?? item.name, `Nomsiz asar ${index + 1}`),
-    author: toText(item.author ?? item.authorName, "Noma'lum muallif"),
+    author: toText(item.author?.name ?? item.authorName, "Noma'lum muallif"),
     coverUrl: toText(item.coverUrl ?? item.cover ?? item.image, DEFAULT_BOOK_COVER),
     rating: toNumber(item.rating),
     category: toText(item.category ?? item.genre, "Boshqa"),
