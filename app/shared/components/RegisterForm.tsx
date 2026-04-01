@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { register as registerRequest } from "@/server/api";
 import type { RegisterFormProps } from "@/types/auth";
+import BrandLogo from "@/app/shared/brand/BrandLogo";
 
 type RegisterState = {
   email: string;
@@ -157,29 +158,11 @@ function RefreshIcon({ className }: { className?: string }) {
   );
 }
 
-function Logo({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M7 8C7 5.23858 9.23858 3 12 3C14.7614 3 17 5.23858 17 8C17 9.5 16 10.5 14.5 11.5L9.5 14.5C8 15.5 7 16.5 7 18C7 20.7614 9.23858 23 12 23C14.7614 23 17 20.7614 17 18" />
-    </svg>
-  );
-}
-
-function Branding() {
+function Branding({ locale }: { locale: string }) {
   return (
     <div className="max-w-lg space-y-6 text-center text-white md:text-left">
-      <div className="relative mb-2 flex h-24 w-24 items-center justify-center rounded-3xl border border-white/20 bg-white/10 shadow-2xl shadow-black/10 transition-transform duration-300 hover:scale-105">
-        <Logo className="h-[60px] w-[60px] text-white drop-shadow-md" />
+      <div className="relative mb-2 inline-flex items-center justify-center rounded-[28px] border border-white/20 bg-white/10 px-5 py-4 shadow-2xl shadow-black/10 transition-transform duration-300 hover:scale-105">
+        <BrandLogo locale={locale} size={60} showWordmark={false} priority />
       </div>
 
       <div className="space-y-2">
@@ -280,7 +263,7 @@ export default function RegisterForm({ locale }: RegisterFormProps) {
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center gap-8 py-8 md:flex-row md:justify-around md:gap-16">
         <div className="flex w-full justify-center md:w-1/2 md:justify-start">
-          <Branding />
+          <Branding locale={locale} />
         </div>
 
         <div className="flex w-full justify-center md:w-auto">

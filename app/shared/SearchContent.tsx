@@ -183,15 +183,33 @@ export default function SearchContent() {
     return () => observer.disconnect();
   }, [appliedFilters, fetchBooks, hasMore, loading, loadingMore, page]);
 
+  const activeFiltersCount = [
+    filters.category !== DEFAULT_FILTERS.category,
+    filters.language !== DEFAULT_FILTERS.language,
+    filters.status !== DEFAULT_FILTERS.status,
+    filters.minPages !== DEFAULT_FILTERS.minPages || filters.maxPages !== DEFAULT_FILTERS.maxPages,
+  ].filter(Boolean).length;
+
   return (
     <div className="flex h-full">
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
-          <div className="mb-8">
-            <h2 className="mb-6 flex items-center gap-3 text-3xl font-bold text-dark-900">
-              <SearchIcon className="size-8 text-primary" />
-              Qidiruv
-            </h2>
+          <div className="mb-8 rounded-[28px] border border-primary-light/20 bg-white/70 p-6 shadow-lg shadow-black/5 backdrop-blur-sm md:p-8">
+            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="flex items-center gap-3 text-3xl font-bold text-dark-900">
+                  <SearchIcon className="size-8 text-primary" />
+                  Qidiruv
+                </h2>
+                <p className="mt-2 text-sm text-dark-900/60">
+                  Kitob, muallif yoki janr bo&apos;yicha mos asarlarni toping.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-primary-light/25 bg-primary/5 px-4 py-2 text-xs font-semibold text-primary-dark">
+                <span className="size-2 rounded-full bg-primary" />
+                {loading ? "Yuklanmoqda..." : `${books.length} ta natija`}
+              </div>
+            </div>
             <div className="group relative">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-6 text-primary/55 transition-colors group-focus-within:text-primary">
                 <SearchIcon className="size-6" />
@@ -240,8 +258,14 @@ export default function SearchContent() {
               ))}
             </div>
           ) : books.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-primary-light/30 bg-white/70 p-10 text-center text-sm text-dark-900/60">
-              Hech narsa topilmadi.
+            <div className="rounded-[28px] border border-dashed border-primary-light/30 bg-white/80 p-10 text-center shadow-sm">
+              <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <SearchIcon className="size-6" />
+              </div>
+              <h3 className="text-lg font-bold text-dark-900">Hech narsa topilmadi</h3>
+              <p className="mt-2 text-sm text-dark-900/60">
+                So&apos;rovni o&apos;zgartirib ko&apos;ring yoki filtrlardan bir qismini tozalang.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-8 pb-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -256,7 +280,7 @@ export default function SearchContent() {
           )}
 
           {error ? (
-            <div className="mb-8 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+            <div className="mb-8 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
               {error}
             </div>
           ) : null}
@@ -282,13 +306,20 @@ export default function SearchContent() {
             <FilterIcon className="size-5 text-primary" />
             Filtrlar
           </h3>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-sm font-semibold text-primary hover:text-primary-dark"
-          >
-            Tozalash
-          </button>
+          <div className="flex items-center gap-3">
+            {activeFiltersCount > 0 ? (
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
+                {activeFiltersCount} faol
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-sm font-semibold text-primary hover:text-primary-dark"
+            >
+              Tozalash
+            </button>
+          </div>
         </div>
 
         <div className="mb-10">
@@ -351,9 +382,12 @@ export default function SearchContent() {
           </div>
         </div>
 
-        <div className="mb-10">
-          <h4 className="mb-4 text-xs font-bold uppercase tracking-widest text-dark-900/40">Til</h4>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="relative mb-10 ">
+          <span className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Soon
+          </span>
+          <h4 className="mb-4 blur-md text-xs font-bold uppercase tracking-widest text-dark-900/40">Til</h4>
+          <div className="grid grid-cols-2 gap-2 blur-md">
             {LANGUAGE_OPTIONS.map((language) => {
               const isActive = filters.language === language;
 
@@ -365,8 +399,8 @@ export default function SearchContent() {
                   onClick={() => updateFilter("language", language)}
                   className={`rounded-xl border px-4 py-2 text-xs font-bold transition-all ${
                     isActive
-                      ? "border-primary bg-primary text-white shadow-lg shadow-primary/20"
-                      : "border-primary-light/30 bg-transparent text-dark-900/65 hover:border-primary/50 hover:text-primary"
+                      ? "border-primary/80 bg-primary/90 text-white shadow-lg shadow-primary/20 backdrop-blur-md"
+                      : "border-primary-light/30 bg-white/55 text-dark-900/65 backdrop-blur-md hover:border-primary/50 hover:bg-white/75 hover:text-primary"
                   }`}
                 >
                   {language}
@@ -376,13 +410,18 @@ export default function SearchContent() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => applyFilters(filters)}
-          className="w-full rounded-2xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-dark active:scale-[0.98]"
-        >
-          Natijalarni ko&apos;rish
-        </button>
+        <div className="relative">
+          <span className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Soon
+          </span>
+          <button
+            type="button"
+            onClick={() => applyFilters(filters)}
+            className="w-full blur-md rounded-2xl border border-primary/70 bg-primary/90 py-4 font-bold text-white shadow-lg shadow-primary/30 backdrop-blur-md transition-all hover:bg-primary-dark active:scale-[0.98]"
+          >
+            Natijalarni ko&apos;rish
+          </button>
+        </div>
       </aside>
     </div>
   );

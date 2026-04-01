@@ -1,4 +1,4 @@
-import { MdCameraAlt, MdEdit, MdShare } from "react-icons/md";
+import { MdCameraAlt, MdEdit } from "react-icons/md";
 import type { ProfileUser } from "../types";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
@@ -67,13 +67,6 @@ export default function ProfileHeader({ user }: ProfileHeaderProps) {
         </div>
 
         <div className="mb-2 mt-4 flex w-full items-center gap-3 md:mt-0 md:w-auto">
-          <Button
-            variant="secondary"
-            icon={<MdShare />}
-            className="flex-1 border-primary-light/40 bg-white text-dark-900 hover:bg-primary/5 md:flex-none"
-          >
-            Ulashish
-          </Button>
           <Button variant="primary" icon={<MdEdit />} className="flex-1 md:flex-none">
             Profilni tahrirlash
           </Button>

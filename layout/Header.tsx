@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { MAIN_NAV_ITEMS, PERSONAL_NAV_ITEMS } from "@/app/shared/dashboard/constants";
 import { renderNavIcon, resolveNavHref } from "@/app/shared/dashboard/navigation";
-import { BellIcon, BookIcon, MenuIcon, SearchIcon } from "@/app/shared/dashboard/components/icons";
+import { BellIcon, MenuIcon, SearchIcon } from "@/app/shared/dashboard/components/icons";
 import SignOutButton from "@/app/shared/components/SignOutButton";
+import BrandLogo from "@/app/shared/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -76,12 +77,7 @@ export default function Header({ currentUser, locale }: HeaderProps) {
     <header className="sticky top-0 z-20 flex h-20 shrink-0 items-center justify-between border-b border-primary-light/20 bg-white/95 px-4 backdrop-blur md:px-6">
       <div className="flex items-center gap-3">
         <MobileMenu locale={locale} />
-        <Link href={`/${locale}`} className="flex w-auto shrink-0 items-center gap-3 md:w-64">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-dark text-white shadow-lg shadow-primary/25">
-            <BookIcon className="size-5" />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-dark-900">SAHIFA-X</h1>
-        </Link>
+        <BrandLogo locale={locale} className="md:w-64" priority />
       </div>
 
       <div className="hidden max-w-2xl flex-1 px-8 md:block">

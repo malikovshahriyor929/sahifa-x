@@ -61,21 +61,37 @@ function formatCompact(value: number): string {
   return String(value);
 }
 
+function normalizeDisplayName(value?: string | null): string {
+  if (!value) {
+    return "Foydalanuvchi";
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Foydalanuvchi";
+  }
+
+  return trimmed.length > 40 ? `${trimmed.slice(0, 37)}...` : trimmed;
+}
+
 export default function DashboardApp({ locale, user }: DashboardAppProps) {
   const [books, setBooks] = useState<Book[]>([]);
   const [myBooks, setMyBooks] = useState<Book[]>([]);
   const [myBooksTotal, setMyBooksTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
 
     async function load() {
       setLoading(true);
+      setError(null);
 
       try {
         const [booksPayload, myBooksPayload] = await Promise.all([
-          getBooks(),
+          getBooks({ page: 1, per_page: 24 }),
           getMyBooks({ page: 1, per_page: 10 }).catch(() => null),
         ]);
 
@@ -103,6 +119,7 @@ export default function DashboardApp({ locale, user }: DashboardAppProps) {
         setBooks([]);
         setMyBooks([]);
         setMyBooksTotal(0);
+        setError("Dashboard ma'lumotlarini yuklab bo'lmadi.");
       } finally {
         if (active) {
           setLoading(false);
@@ -115,29 +132,33 @@ export default function DashboardApp({ locale, user }: DashboardAppProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const safeUser: CurrentUser = {
-    name: user?.name ?? user?.email ?? "",
-    role: "",
+    name: normalizeDisplayName(user?.name ?? user?.email),
+    role: "Kitobxon",
     avatarUrl: user?.image ?? "",
   };
 
+  const dashboardBooks = useMemo(() => {
+    return books.length > 0 ? books : myBooks;
+  }, [books, myBooks]);
+
   const trendingBooks = useMemo(() => {
-    return pickTrendingBooks(books);
-  }, [books]);
+    return pickTrendingBooks(dashboardBooks);
+  }, [dashboardBooks]);
 
   const newArrivalBooks = useMemo(() => {
-    return pickNewArrivalBooks(books);
-  }, [books]);
+    return pickNewArrivalBooks(dashboardBooks);
+  }, [dashboardBooks]);
 
   const topAuthors = useMemo<Author[]>(() => {
-    return deriveTopAuthors(books);
-  }, [books]);
+    return deriveTopAuthors(dashboardBooks);
+  }, [dashboardBooks]);
 
   const topGenres = useMemo(() => {
-    return deriveTopGenres(books);
-  }, [books]);
+    return deriveTopGenres(dashboardBooks);
+  }, [dashboardBooks]);
 
   const stats: DashboardStats = useMemo(() => {
     const libraryCount = myBooksTotal;
@@ -155,17 +176,19 @@ export default function DashboardApp({ locale, user }: DashboardAppProps) {
 
   const startWritingHref = `/${locale}/books`;
   const continueReadingHref = useMemo(() => {
-    const continueBook = myBooks[0] ?? books[0];
+    const continueBook = myBooks[0] ?? dashboardBooks[0];
     if (continueBook?.id) {
       return `/${locale}/books/${encodeURIComponent(continueBook.id)}`;
     }
     return `/${locale}/search`;
-  }, [books, locale, myBooks]);
+  }, [dashboardBooks, locale, myBooks]);
 
   return (
     <MainContent
       locale={locale}
       loading={loading}
+      error={error}
+      onRetry={() => setReloadKey((prev) => prev + 1)}
       currentUser={safeUser}
       stats={stats}
       trendingBooks={trendingBooks}

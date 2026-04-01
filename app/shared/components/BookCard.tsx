@@ -82,7 +82,7 @@ export default function BookCard({ book, link, className, size = "md" }: BookCar
       <CardContent className="!p-0 !shadow-none">
         <div
           className={cn(
-            "relative aspect-[2/3] w-full overflow-hidden shadow-black/30 p-0",
+            "relative aspect-[2/3] w-full overflow-hidden border border-primary-light/15 bg-white shadow-lg shadow-black/15 p-0",
             styles.coverRadius
           )}
         >
@@ -90,9 +90,10 @@ export default function BookCard({ book, link, className, size = "md" }: BookCar
           <img
             src={coverUrl}
             alt={title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110 "
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent opacity-85 transition-opacity duration-500 group-hover:opacity-75" />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
           <div
             className={cn(
               "absolute right-3 top-3 flex items-center gap-1 rounded-lg border border-white/10 bg-black/50 font-bold text-white backdrop-blur-md",
@@ -105,16 +106,16 @@ export default function BookCard({ book, link, className, size = "md" }: BookCar
         </div>
       </CardContent>
 
-      <CardFooter className="flex flex-col items-start bg-transparent  !px-1">
+      <CardFooter className="flex flex-col items-start bg-transparent !px-1">
         <CardTitle
           className={cn(
-            "truncate font-bold leading-tight text-dark-900 transition-colors group-hover:text-primary max-w-[200px] line-clamp-1",
+            "max-w-[220px] line-clamp-2 font-bold leading-tight text-dark-900 transition-colors group-hover:text-primary",
             styles.title
           )}
         >
           {title}
         </CardTitle>
-        <CardDescription className={cn("mt-1 text-dark-900/60", styles.author)}>
+        <CardDescription className={cn("mt-1 font-medium text-dark-900/55", styles.author)}>
           {author}
         </CardDescription>
       </CardFooter>
@@ -124,7 +125,7 @@ export default function BookCard({ book, link, className, size = "md" }: BookCar
   return (
     <Card
       className={cn(
-        "group flex flex-col border-0 bg-transparent !shadow-none ",
+        "group flex flex-col border-0 bg-transparent !shadow-none",
         link && "cursor-pointer",
         styles.gap,
         className,

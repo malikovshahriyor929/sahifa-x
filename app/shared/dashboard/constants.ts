@@ -4,7 +4,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
   { icon: "home", label: "Asosiy", active: true },
   { icon: "search", label: "Qidiruv" },
   { icon: "idea", label: "Idea Lab", href: "books" },
-  { icon: "bookmark", label: "Saqlanganlar" },
+  // { icon: "bookmark", label: "Saqlanganlar" },
 ];
 
 export const PERSONAL_NAV_ITEMS: NavItem[] = [

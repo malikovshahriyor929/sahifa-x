@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import BrandLogo from "@/app/shared/brand/BrandLogo";
 import { MAIN_NAV_ITEMS, PERSONAL_NAV_ITEMS } from "@/app/shared/dashboard/constants";
 import { renderNavIcon, resolveNavHref } from "@/app/shared/dashboard/navigation";
 import type { NavItem } from "@/types";
@@ -54,7 +55,7 @@ export default function Sidebar({ locale }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden h-full w-64 shrink-0 flex-col overflow-y-auto border-r border-primary-light/20 bg-white px-4 py-6 md:flex">
+    <aside className="hidden h-full w-64 shrink-0 flex-col overflow-y-auto border-r border-primary-light/20 bg-white/55 px-4 py-6 backdrop-blur-xl md:flex">
       <div className="mb-2 px-4">
         <p className="mb-2 text-xs font-bold uppercase tracking-wider text-primary-dark/50">Menu</p>
       </div>
@@ -72,16 +73,22 @@ export default function Sidebar({ locale }: SidebarProps) {
         })}
       </nav>
 
-      <div className="mx-4 my-2 h-px bg-primary-light/30" />
+      <div className="mx-4 my-2 h-px bg-primary-light/30 blur-sm" />
 
-      <div className="mb-2 mt-4 px-4">
-        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-primary-dark/50">Shaxsiy</p>
+      <div className="relative mt-4">
+        <span className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+          Soon
+        </span>
+        <div className="mb-2 px-4 blur-sm">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-primary-dark/50">Shaxsiy</p>
+        </div>
+
+        <nav className="flex flex-col blur-sm">
+          {PERSONAL_NAV_ITEMS.map((item) => (
+            <NavLink key={item.label} item={item} href={resolveHref(item, locale)} active={false} />
+          ))}
+        </nav>
       </div>
-      <nav className="flex flex-col">
-        {PERSONAL_NAV_ITEMS.map((item) => (
-          <NavLink key={item.label} item={item} href={resolveHref(item, locale)} active={false} />
-        ))}
-      </nav>
 
       {/* <div className="mt-auto pt-6">
         <div className="group relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-dark to-dark-900 p-4">

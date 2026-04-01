@@ -6,24 +6,7 @@ import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { LoginFormProps } from "@/types/auth";
 import { setRefreshTokenCookie } from "@/app/shared/authCookies";
-
-function Logo({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M8 8C8 5.23858 10.2386 3 13 3C15.7614 3 18 5.23858 18 8C18 9.5 17 10.5 15.5 11.5L10.5 14.5C9 15.5 8 16.5 8 18C8 20.7614 10.2386 23 13 23C15.7614 23 18 20.7614 18 18" />
-    </svg>
-  );
-}
+import BrandLogo from "@/app/shared/brand/BrandLogo";
 
 function PersonIcon({ className }: { className?: string }) {
   return (
@@ -172,8 +155,8 @@ export default function LoginForm({ callbackUrl, locale }: LoginFormProps) {
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center justify-center gap-12 px-4 sm:px-6 lg:flex-row lg:justify-around lg:gap-24">
         <div className="max-w-lg space-y-8 text-center text-white lg:text-left">
-          <div className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-3xl border border-white/20 bg-white/10 shadow-xl ring-1 ring-white/5 backdrop-blur-md lg:mx-0">
-            <Logo className="h-14 w-14 text-white drop-shadow-md" />
+          <div className="relative mx-auto flex items-center justify-center rounded-[28px] border border-white/20 bg-white/10 px-5 py-4 shadow-xl ring-1 ring-white/5 backdrop-blur-md lg:mx-0">
+            <BrandLogo locale={locale} size={56} showWordmark={false} priority />
           </div>
 
           <div className="space-y-4">

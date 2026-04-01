@@ -9,6 +9,12 @@ type BookCardProps = {
 
 export default function BookCard({ book }: BookCardProps) {
   const isPublished = book.status === "PUBLISHED";
+  const primaryActionLabel = book.primaryActionLabel ?? (isPublished ? "Tahrirlash" : "Davom etish");
+  const primaryActionIcon = book.primaryActionIcon ?? (isPublished ? (
+    <MdEdit className="text-base" />
+  ) : (
+    <MdEditNote className="text-base" />
+  ));
 
   return (
     <div className="group relative flex flex-col gap-3">
@@ -67,25 +73,20 @@ export default function BookCard({ book }: BookCardProps) {
               : "bg-primary text-white hover:bg-primary-dark"
           }`}
         >
-          {isPublished ? (
-            <>
-              <MdEdit className="text-base" /> Tahrirlash
-            </>
-          ) : (
-            <>
-              <MdEditNote className="text-base" /> Davom etish
-            </>
-          )}
+          <>
+            {primaryActionIcon} {primaryActionLabel}
+          </>
         </Link>
 
-        <button
-          type="button"
-          className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-dark-900/60 transition-colors hover:bg-rose-500/15 hover:text-rose-500"
-        >
-          <MdDelete className="text-base" />
-        </button>
+        {book.showDeleteAction !== false ? (
+          <button
+            type="button"
+            className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-dark-900/60 transition-colors hover:bg-rose-500/15 hover:text-rose-500"
+          >
+            <MdDelete className="text-base" />
+          </button>
+        ) : null}
       </div>
     </div>
   );
 }
-

@@ -14,6 +14,9 @@ export interface ProfileBook {
   lastEdited?: string;
   updatedAt?: string;
   href: string;
+  primaryActionLabel?: string;
+  primaryActionIcon?: ReactNode;
+  showDeleteAction?: boolean;
 }
 
 export interface UserStats {

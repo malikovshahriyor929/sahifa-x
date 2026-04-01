@@ -40,7 +40,7 @@ export default function NewArrivalsSection({ locale, books, loading }: NewArriva
             />
           ))}
         </div>
-      ) : (
+      ) : books.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {books.map((book) => (
             <Link
@@ -89,6 +89,10 @@ export default function NewArrivalsSection({ locale, books, loading }: NewArriva
               </div>
             </Link>
           ))}
+        </div>
+      ) : (
+        <div className="rounded-[24px] border border-dashed border-primary-light/30 bg-white/80 p-8 text-center text-sm text-dark-900/60 shadow-sm">
+          Yangi qo&apos;shilgan kitoblar hozircha mavjud emas.
         </div>
       )}
     </div>

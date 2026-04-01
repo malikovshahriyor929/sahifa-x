@@ -27,7 +27,7 @@ export default function TrendingSection({ locale, books, loading }: TrendingSect
             />
           ))}
         </div>
-      ) : (
+      ) : books.length > 0 ? (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {books.map((book) => (
             <Link
@@ -66,6 +66,10 @@ export default function TrendingSection({ locale, books, loading }: TrendingSect
               </span>
             </Link>
           ))}
+        </div>
+      ) : (
+        <div className="rounded-[24px] border border-dashed border-primary-light/30 bg-white/80 p-8 text-center text-sm text-dark-900/60 shadow-sm">
+          Trenddagi kitoblar hozircha topilmadi.
         </div>
       )}
     </section>

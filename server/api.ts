@@ -437,6 +437,13 @@ export async function getMyBooks(params?: QueryParams) {
   return res.data;
 }
 
+export async function getSavedBooks(params?: QueryParams) {
+  const res = await axiosInstance.get<UnknownRecord>(booksPath("/get-saved-books"), {
+    params,
+  });
+  return res.data;
+}
+
 export async function editBook(payload: BookPayload) {
   const res = await axiosInstance.put<UnknownRecord>(
     booksPath("/edit-book"),

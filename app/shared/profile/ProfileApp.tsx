@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { MdAdd, MdAutoStories, MdLocalFireDepartment, MdStar } from "react-icons/md";
-import { getMyBooks, getProfile } from "@/server/api";
+import { MdAdd, MdAutoStories, MdLocalFireDepartment, MdMenuBook, MdStar } from "react-icons/md";
+import { getMyBooks, getProfile, getSavedBooks } from "@/server/api";
 import { DEFAULT_BOOK_COVER } from "@/app/shared/dashboard/constants";
 import type { Achievement, Activity, ProfileBook, ProfileBookStatus, ProfileUser } from "./types";
 import ProfileHeader from "./components/ProfileHeader";
-import Tabs from "./components/Tabs";
+import Tabs, { type ProfileTabId } from "./components/Tabs";
 import BookCard from "./components/BookCard";
 import Achievements from "./components/Achievements";
 import ActivityFeed from "./components/ActivityFeed";
@@ -158,6 +158,52 @@ function normalizeMyBooks(payload: unknown, locale: string): { books: ProfileBoo
   return { books, total };
 }
 
+function normalizeSavedBooks(payload: unknown, locale: string): { books: ProfileBook[]; total: number } {
+  if (!isRecord(payload)) {
+    return { books: [], total: 0 };
+  }
+
+  const rawBooks = Array.isArray(payload.books)
+    ? payload.books
+    : isRecord(payload.data) && Array.isArray(payload.data.books)
+      ? payload.data.books
+      : Array.isArray(payload.data)
+        ? payload.data
+        : [];
+  const meta = isRecord(payload._meta)
+    ? payload._meta
+    : isRecord(payload.data) && isRecord(payload.data._meta)
+      ? payload.data._meta
+      : {};
+  const total = toNumber(meta.total) ?? rawBooks.length;
+
+  const books = rawBooks
+    .filter((item): item is UnknownRecord => isRecord(item))
+    .map((item, index) => {
+      const id = toText(item.id ?? item._id, `saved-book-${index + 1}`);
+      const statusRaw = toText(item.status, "DRAFT").toUpperCase();
+      const status: ProfileBookStatus = statusRaw === "PUBLISHED" ? "PUBLISHED" : "DRAFT";
+
+      return {
+        id,
+        title: toText(item.title, `Saqlangan asar ${index + 1}`),
+        genre: toText(item.category, "Boshqa"),
+        coverUrl: toText(item.coverUrl, DEFAULT_BOOK_COVER),
+        status,
+        views: "0",
+        comments: 0,
+        lastEdited: `Saqlangan: ${formatDate(item.updatedAt ?? item.createdAt)}`,
+        updatedAt: toText(item.updatedAt ?? item.createdAt),
+        href: `/${locale}/books/${encodeURIComponent(id)}`,
+        primaryActionLabel: "O'qish",
+        primaryActionIcon: <MdMenuBook className="text-base" />,
+        showDeleteAction: false,
+      };
+    });
+
+  return { books, total };
+}
+
 function buildAchievements(totalBooks: number): Achievement[] {
   return [
     {
@@ -208,10 +254,12 @@ function buildActivities(books: ProfileBook[]): Activity[] {
 }
 
 export default function ProfileApp({ locale }: ProfileAppProps) {
+  const [activeTab, setActiveTab] = useState<ProfileTabId>("my-books");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<ProfileUser | null>(null);
-  const [books, setBooks] = useState<ProfileBook[]>([]);
+  const [myBooks, setMyBooks] = useState<ProfileBook[]>([]);
+  const [savedBooks, setSavedBooks] = useState<ProfileBook[]>([]);
   const [worksTotal, setWorksTotal] = useState(0);
 
   useEffect(() => {
@@ -222,20 +270,23 @@ export default function ProfileApp({ locale }: ProfileAppProps) {
       setError(null);
 
       try {
-        const [profilePayload, myBooksPayload] = await Promise.all([
+        const [profilePayload, myBooksPayload, savedBooksPayload] = await Promise.all([
           getProfile(),
           getMyBooks({ page: 1, per_page: 10 }),
+          getSavedBooks({ page: 1, per_page: 10 }),
         ]);
 
         if (!active) {
           return;
         }
 
-        const normalizedBooks = normalizeMyBooks(myBooksPayload, locale);
-        const normalizedUser = normalizeProfile(profilePayload, normalizedBooks.total);
+        const normalizedMyBooks = normalizeMyBooks(myBooksPayload, locale);
+        const normalizedSavedBooks = normalizeSavedBooks(savedBooksPayload, locale);
+        const normalizedUser = normalizeProfile(profilePayload, normalizedMyBooks.total);
 
-        setBooks(normalizedBooks.books);
-        setWorksTotal(normalizedBooks.total);
+        setMyBooks(normalizedMyBooks.books);
+        setSavedBooks(normalizedSavedBooks.books);
+        setWorksTotal(normalizedMyBooks.total);
         setUser(normalizedUser);
       } catch {
         if (!active) {
@@ -257,7 +308,16 @@ export default function ProfileApp({ locale }: ProfileAppProps) {
   }, [locale]);
 
   const achievements = useMemo(() => buildAchievements(worksTotal), [worksTotal]);
-  const activities = useMemo(() => buildActivities(books), [books]);
+  const activities = useMemo(() => buildActivities(myBooks), [myBooks]);
+  const activeBooks = activeTab === "saved-books" ? savedBooks : myBooks;
+  const activeTitle =
+    activeTab === "saved-books"
+      ? "Saqlangan asarlar"
+      : activeTab === "my-books"
+        ? "Chop etilgan asarlar"
+        : activeTab === "subscriptions"
+          ? "Obunalar"
+          : "Sozlamalar";
 
   if (loading) {
     return (
@@ -290,40 +350,60 @@ export default function ProfileApp({ locale }: ProfileAppProps) {
     <main className="relative min-h-screen flex-1 overflow-y-auto bg-background">
       <div className="mx-auto flex max-w-[1200px] flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
         <ProfileHeader user={user} />
-        <Tabs />
+        <Tabs value={activeTab} onChange={setActiveTab} />
 
         <div className="grid grid-cols-12 gap-8">
           <div className="col-span-12 lg:col-span-8 xl:col-span-9">
             <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-              <h3 className="text-xl font-bold text-dark-900">Chop etilgan asarlar</h3>
-              <div className="flex gap-2">
-                <select className="block rounded-lg border border-primary-light/30 bg-white p-2.5 text-sm text-dark-900/75 outline-none focus:border-primary focus:ring-2 focus:ring-primary/25">
-                  <option>Barchasi</option>
-                  <option>Chop etilgan</option>
-                  <option>Qoralamalar</option>
-                </select>
-              </div>
+              <h3 className="text-xl font-bold text-dark-900">{activeTitle}</h3>
+              {activeTab === "my-books" ? (
+                <div className="flex gap-2">
+                  <select className="block rounded-lg border border-primary-light/30 bg-white p-2.5 text-sm text-dark-900/75 outline-none focus:border-primary focus:ring-2 focus:ring-primary/25">
+                    <option>Barchasi</option>
+                    <option>Chop etilgan</option>
+                    <option>Qoralamalar</option>
+                  </select>
+                </div>
+              ) : null}
             </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {books.map((book) => (
-                <BookCard key={book.id} book={book} />
-              ))}
+            {activeTab === "my-books" || activeTab === "saved-books" ? (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {activeBooks.map((book) => (
+                  <BookCard key={book.id} book={book} />
+                ))}
 
-              <div className="group relative flex h-full flex-col gap-3">
-                <Link
-                  href={`/${locale}/books`}
-                  className="relative flex aspect-[2/3] w-full flex-col items-center justify-center gap-4 rounded-[20px] border-2 border-dashed border-primary-light/35 transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-primary/5"
-                >
-                  <div className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-dark-900/55 transition-colors group-hover:bg-primary/20 group-hover:text-primary">
-                    <MdAdd className="text-3xl" />
+                {activeBooks.length === 0 ? (
+                  <div className="col-span-full rounded-2xl border border-dashed border-primary-light/30 bg-white/70 p-8 text-center text-sm text-dark-900/60">
+                    {activeTab === "saved-books"
+                      ? "Hozircha saqlangan kitoblar yo'q."
+                      : "Hozircha asarlar topilmadi."}
                   </div>
-                  <span className="text-sm font-bold text-dark-900/60 group-hover:text-dark-900">
-                    Yangi asar qo&apos;shish
-                  </span>
-                </Link>
+                ) : null}
+
+                {activeTab === "my-books" ? (
+                  <div className="group relative flex h-full flex-col gap-3">
+                    <Link
+                      href={`/${locale}/books`}
+                      className="relative flex aspect-[2/3] w-full flex-col items-center justify-center gap-4 rounded-[20px] border-2 border-dashed border-primary-light/35 transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-primary/5"
+                    >
+                      <div className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-dark-900/55 transition-colors group-hover:bg-primary/20 group-hover:text-primary">
+                        <MdAdd className="text-3xl" />
+                      </div>
+                      <span className="text-sm font-bold text-dark-900/60 group-hover:text-dark-900">
+                        Yangi asar qo&apos;shish
+                      </span>
+                    </Link>
+                  </div>
+                ) : null}
               </div>
-            </div>
+            ) : (
+              <div className="rounded-2xl border border-primary-light/20 bg-white/80 p-8 text-sm text-dark-900/65">
+                {activeTab === "subscriptions"
+                  ? "Obunalar bo'limi hozircha tayyor emas."
+                  : "Sozlamalar bo'limi hozircha tayyor emas."}
+              </div>
+            )}
           </div>
 
           <div className="col-span-12 flex flex-col gap-6 lg:col-span-4 xl:col-span-3">
