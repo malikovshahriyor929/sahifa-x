@@ -89,171 +89,105 @@ function isTokenExpired(token: AuthToken): boolean {
     return false;
   }
 
-  const exp = asFiniteNumber((token as Record<string, unknown>).exp);
-  if (!exp) {
+  const expiresAt = asFiniteNumber((token as Record<string, unknown>).exp);
+  if (!expiresAt) {
     return false;
   }
 
-  return Date.now() >= exp * 1000;
+  return expiresAt * 1000 <= Date.now();
 }
 
-function decodeBase64Url(input: string): string | null {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-
-  try {
-    return atob(padded);
-  } catch {
-    return null;
-  }
+function getRequestRefreshToken(request: NextRequest, token: AuthToken): string | null {
+  const cookieValue = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+  return cookieValue ?? getRefreshTokenFromAuthToken(token);
 }
 
 function isAccessTokenExpired(accessToken: string | null): boolean {
   if (!accessToken) {
-    return false;
+    return true;
   }
 
   const parts = accessToken.split(".");
-  if (parts.length < 2) {
-    return false;
-  }
-
-  const payload = decodeBase64Url(parts[1] ?? "");
-  if (!payload) {
+  if (parts.length !== 3) {
     return false;
   }
 
   try {
-    const parsed = JSON.parse(payload) as Record<string, unknown>;
-    const exp = asFiniteNumber(parsed.exp);
-    if (!exp) {
-      return false;
-    }
-    return Date.now() >= exp * 1000;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as Record<string, unknown>;
+    const expiresAt = asFiniteNumber(payload.exp);
+    return expiresAt ? expiresAt * 1000 <= Date.now() : false;
   } catch {
     return false;
   }
 }
 
-function getApiHost(): string | null {
-  const apiHost = (
+function getApiBaseUrl(): string | null {
+  const base =
     process.env.API_BASE_URL ??
     process.env.AUTH_API_BASE_URL ??
     process.env.NEXT_PUBLIC_BASE_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
-    ""
-  )
-    .trim()
-    .replace(/\/+$/, "");
+    "";
 
-  return apiHost || null;
+  const trimmed = base.trim().replace(/\/+$/, "");
+  return trimmed || null;
 }
 
-function getApiLocale(): string {
-  return (
-    process.env.AUTH_API_LOCALE ??
-    process.env.NEXT_PUBLIC_API_LOCALE ??
-    "en"
-  )
-    .trim()
-    .replace(/^\/+|\/+$/g, "");
-}
-
-function asApiPrefix(value: string, fallback: string): string {
-  return (value || fallback).replace(/\/+$/, "").replace(/^([^/])/, "/$1");
-}
-
-function parseTokenPair(payload: unknown): TokenPair {
-  if (!payload || typeof payload !== "object") {
-    return { accessToken: null, refreshToken: null };
-  }
-
-  const record = payload as Record<string, unknown>;
-  const nestedData =
-    typeof record.data === "object" && record.data
-      ? (record.data as Record<string, unknown>)
-      : record;
-  const nestedTokens =
-    typeof nestedData.tokens === "object" && nestedData.tokens
-      ? (nestedData.tokens as Record<string, unknown>)
-      : {};
-
-  const accessToken =
-    asNonEmptyString(nestedData.accessToken) ??
-    asNonEmptyString(record.accessToken) ??
-    asNonEmptyString(nestedTokens.accessToken);
-  const refreshToken =
-    asNonEmptyString(nestedData.refreshToken) ??
-    asNonEmptyString(record.refreshToken) ??
-    asNonEmptyString(nestedTokens.refreshToken);
-
-  return { accessToken, refreshToken };
-}
-
-function setRefreshTokenCookie(response: NextResponse, refreshToken: string): void {
-  response.cookies.set({
-    name: REFRESH_TOKEN_COOKIE,
-    value: refreshToken,
-    path: "/",
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-}
-
-function clearAuthCookies(response: NextResponse): void {
-  SESSION_COOKIE_NAMES.forEach((name) => {
-    response.cookies.set({
-      name,
-      value: "",
-      path: "/",
-      maxAge: 0,
-    });
-  });
-}
-
-function getMyBooksEndpoint(): string | null {
-  const apiHost = getApiHost();
-  if (!apiHost) {
+async function refreshAccessToken(refreshToken: string): Promise<TokenPair | null> {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) {
     return null;
   }
 
-  const apiLocale = getApiLocale();
+  const locale = (process.env.AUTH_API_LOCALE ?? process.env.NEXT_PUBLIC_API_LOCALE ?? "").trim();
+  const authPrefix = (process.env.AUTH_API_PREFIX ?? "auth").trim().replace(/^\/+|\/+$/g, "");
+  const localeSegment = locale ? `/${locale.replace(/^\/+|\/+$/g, "")}` : "";
+  const endpoint = `${baseUrl}${localeSegment}/${authPrefix}/refresh-token`;
 
-  const booksPrefix = asApiPrefix(process.env.NEXT_PUBLIC_BOOKS_PREFIX ?? "/book", "/book");
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+      cache: "no-store",
+    });
 
-  return `${apiHost}${apiLocale ? `/${apiLocale}` : ""}${booksPrefix}/my-books`;
-}
+    if (!response.ok) {
+      return null;
+    }
 
-function getRefreshTokenEndpoints(): string[] {
-  const apiHost = getApiHost();
-  if (!apiHost) {
-    return [];
+    const payload = (await response.json()) as Record<string, unknown>;
+    const data =
+      typeof payload.data === "object" && payload.data
+        ? (payload.data as Record<string, unknown>)
+        : payload;
+    const tokens =
+      typeof data.tokens === "object" && data.tokens
+        ? (data.tokens as Record<string, unknown>)
+        : {};
+
+    return {
+      accessToken:
+        asNonEmptyString(data.accessToken) ??
+        asNonEmptyString(tokens.accessToken),
+      refreshToken:
+        asNonEmptyString(data.refreshToken) ??
+        asNonEmptyString(tokens.refreshToken) ??
+        refreshToken,
+    };
+  } catch {
+    return null;
   }
-
-  const apiLocale = getApiLocale();
-  const authPrefix = asApiPrefix(
-    process.env.AUTH_API_PREFIX ?? process.env.NEXT_PUBLIC_AUTH_PREFIX ?? "/auth",
-    "/auth"
-  );
-
-  const endpoints = new Set<string>();
-  endpoints.add(`${apiHost}${authPrefix}/refresh-token`);
-  if (apiLocale) {
-    endpoints.add(`${apiHost}/${apiLocale}${authPrefix}/refresh-token`);
-  }
-
-  return [...endpoints];
 }
 
 async function isUnauthorizedByBackend(accessToken: string): Promise<boolean> {
-  const endpoint = getMyBooksEndpoint();
-  if (!endpoint) {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) {
     return false;
   }
 
   try {
-    const response = await fetch(endpoint, {
-      method: "GET",
+    const response = await fetch(`${baseUrl}/profile`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -266,83 +200,64 @@ async function isUnauthorizedByBackend(accessToken: string): Promise<boolean> {
   }
 }
 
-async function refreshAccessToken(refreshToken: string): Promise<TokenPair | null> {
-  const endpoints = getRefreshTokenEndpoints();
-  if (endpoints.length === 0) {
-    return null;
+function clearAuthCookies(response: NextResponse): void {
+  for (const cookieName of SESSION_COOKIE_NAMES) {
+    response.cookies.set(cookieName, "", {
+      expires: new Date(0),
+      path: "/",
+    });
   }
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const parsed = parseTokenPair(await response.json());
-      if (!parsed.accessToken) {
-        continue;
-      }
-
-      return parsed;
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
 }
 
-function buildLoginRedirect(request: NextRequest, locale: AppLocale) {
-  const redirectUrl = new URL(`/${locale}/login`, request.nextUrl);
-  redirectUrl.searchParams.set(
-    "callbackUrl",
-    `${request.nextUrl.pathname}${request.nextUrl.search}`
-  );
-  return NextResponse.redirect(redirectUrl);
+function setRefreshTokenCookie(response: NextResponse, refreshToken: string): void {
+  response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
 }
 
-export default async function middleware(request: NextRequest) {
-  const { nextUrl } = request;
-  const { pathname, search } = nextUrl;
+function buildLoginRedirect(request: NextRequest, locale: AppLocale): NextResponse {
+  const url = request.nextUrl.clone();
+  url.pathname = `/${locale}/login`;
+  url.searchParams.set("callbackUrl", request.nextUrl.pathname + request.nextUrl.search);
+  return NextResponse.redirect(url);
+}
 
-  if (pathname === "/") {
-    return NextResponse.redirect(new URL(`/${defaultLocale}`, nextUrl));
-  }
+function isProtectedPath(pathname: string, locale: AppLocale): boolean {
+  const publicPaths = new Set([
+    `/${locale}/login`,
+    `/${locale}/register`,
+  ]);
 
-  if (legacyPaths.has(pathname)) {
-    return NextResponse.redirect(
-      new URL(`/${defaultLocale}${pathname}${search}`, nextUrl)
-    );
-  }
+  return !publicPaths.has(pathname);
+}
 
-  const locale = getLocaleFromPath(pathname);
-  if (!locale) {
+export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api/") || pathname.startsWith("/_next/") || pathname.includes(".")) {
     return NextResponse.next();
   }
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
-  });
+  const localeFromPath = getLocaleFromPath(pathname);
 
-  let requestRefreshToken =
-    asNonEmptyString(request.cookies.get(REFRESH_TOKEN_COOKIE)?.value) ??
-    getRefreshTokenFromAuthToken(token);
+  if (!localeFromPath) {
+    if (legacyPaths.has(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = pathname === "/" ? `/${defaultLocale}` : `/${defaultLocale}${pathname}`;
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
+  const locale = localeFromPath;
+  const token = await getToken({ req: request });
   let accessToken = getAccessToken(token);
+  let requestRefreshToken = getRequestRefreshToken(request, token);
   let refreshedRefreshToken: string | null = null;
-  const isAuthPage =
-    pathname === `/${locale}/login` || pathname === `/${locale}/register`;
-  const isProtectedPage = !isAuthPage;
-
+  const isProtectedPage = isProtectedPath(pathname, locale);
   const tokenHasError = hasTokenAuthError(token);
   const tokenExpired = isTokenExpired(token) || isAccessTokenExpired(accessToken);
   let isLoggedIn = Boolean(accessToken) && !tokenHasError && !tokenExpired;
@@ -416,7 +331,7 @@ export default async function middleware(request: NextRequest) {
   }
 
   if (isLoggedIn) {
-    const response = NextResponse.redirect(new URL(`/${locale}/`, nextUrl));
+    const response = NextResponse.redirect(new URL(`/${locale}/`, request.nextUrl));
     const nextRefreshToken = refreshedRefreshToken;
     if (nextRefreshToken) {
       setRefreshTokenCookie(response, nextRefreshToken);

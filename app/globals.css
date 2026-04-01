@@ -7,6 +7,23 @@
   --background-dark: #0b1718;
   --background-card: #112122;
   --background-hover: #1b2c2d;
+  --font-inter:
+    "Inter",
+    "SF Pro Text",
+    "Segoe UI",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  --font-geist-mono:
+    "SFMono-Regular",
+    "SF Mono",
+    ui-monospace,
+    "Cascadia Code",
+    "Roboto Mono",
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
 }
 
 @theme inline {
