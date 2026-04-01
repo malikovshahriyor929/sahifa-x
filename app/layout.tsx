@@ -58,6 +58,9 @@ export const metadata: Metadata = {
     description: seoConfig.defaultDescription,
     images: ["/logo-round.svg"],
   },
+  verification: {
+    google: "Hv8lqnEoVwMsdjC3-JelQnl29UF2i74Hy--Xa_bcj1g",
+  },
   robots: {
     index: true,
     follow: true,
