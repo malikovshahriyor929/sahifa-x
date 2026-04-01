@@ -229,12 +229,24 @@ function buildLoginRedirect(request: NextRequest, locale: AppLocale): NextRespon
 }
 
 function isProtectedPath(pathname: string, locale: AppLocale): boolean {
+  const normalizedPath = pathname.replace(/\/+$/, "") || `/${locale}`;
   const publicPaths = new Set([
+    `/${locale}`,
     `/${locale}/login`,
     `/${locale}/register`,
+    `/${locale}/search`,
   ]);
 
-  return !publicPaths.has(pathname);
+  if (publicPaths.has(normalizedPath)) {
+    return false;
+  }
+
+  // Public book detail and reader routes for SEO/discovery.
+  if (normalizedPath.startsWith(`/${locale}/books/`)) {
+    return false;
+  }
+
+  return true;
 }
 
 export async function proxy(request: NextRequest) {
