@@ -11,6 +11,7 @@ type BackendLoginResponse = {
     id?: string | number;
     name?: string;
     fullName?: string;
+    username?: string;
     email?: string;
   };
 };
@@ -48,6 +49,9 @@ function getLoginEndpoints(): string[] {
   const base = (
     process.env.API_BASE_URL ??
     process.env.AUTH_API_BASE_URL ??
+    process.env.API_URL ??
+    process.env.BACKEND_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
     process.env.NEXT_PUBLIC_BASE_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
     ""
@@ -84,6 +88,10 @@ function parseLoginResponse(
   const nestedData = isRecord(payload.data) ? payload.data : payload;
   const nestedUser = isRecord(nestedData.user)
     ? nestedData.user
+    : isRecord(nestedData.userdto)
+      ? nestedData.userdto
+      : isRecord(payload.userdto)
+        ? payload.userdto
     : isRecord(payload.user)
       ? payload.user
       : {};
@@ -135,6 +143,7 @@ function buildLoginPayloads(identity: string, password: string): JsonRecord[] {
 }
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
   pages: {
     signIn: `/${defaultLocale}/login`,

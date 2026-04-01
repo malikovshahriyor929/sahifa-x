@@ -125,6 +125,9 @@ function getApiBaseUrl(): string | null {
   const base =
     process.env.API_BASE_URL ??
     process.env.AUTH_API_BASE_URL ??
+    process.env.API_URL ??
+    process.env.BACKEND_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
     process.env.NEXT_PUBLIC_BASE_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
     "";
