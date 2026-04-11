@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { LoginFormProps } from "@/types/auth";
@@ -110,6 +110,27 @@ export default function LoginForm({ callbackUrl, locale }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const showErrorToast = (message: string) => {
+    setToastMessage(message);
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+      toastTimerRef.current = null;
+    }, 3500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   const togglePasswordVisibility = () => {
     setShowPassword((prev) => !prev);
@@ -132,7 +153,9 @@ export default function LoginForm({ callbackUrl, locale }: LoginFormProps) {
     });
 
     if (!response || response.error) {
-      setError("Login yoki parol noto'g'ri.");
+      const message = "Login yoki parol noto'g'ri.";
+      setError(message);
+      showErrorToast(message);
       setPending(false);
       return;
     }
@@ -146,8 +169,13 @@ export default function LoginForm({ callbackUrl, locale }: LoginFormProps) {
     router.push(response.url ?? callbackUrl);
   };
 
-  return (
+    return (
     <div className="relative h-full w-full overflow-hidden bg-gradient-to-br from-primary via-primary-dark to-dark-900 text-dark-900">
+      {toastMessage ? (
+        <div className="pointer-events-none fixed right-4 top-4 z-[100] max-w-sm rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 shadow-lg">
+          {toastMessage}
+        </div>
+      ) : null}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-[10%] -top-[20%] h-[50%] w-[50%] rounded-full bg-white opacity-5 blur-[100px]" />
         <div className="absolute -right-[10%] top-[40%] h-[60%] w-[40%] rounded-full bg-[#053334] opacity-20 blur-[80px]" />
